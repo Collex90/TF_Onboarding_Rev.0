@@ -1,13 +1,24 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Candidate, JobPosition, ScorecardSchema, OnboardingPhase } from "../types";
 
-// Initialize the client using the environment variable.
+// Initialize the client safely handling both Vite and legacy envs
 const getAI = () => {
-    // Safe check for API Key
-    const key = process.env.API_KEY;
+    let key = '';
+    try {
+        // @ts-ignore - Vite environment check
+        key = import.meta.env.VITE_API_KEY || '';
+    } catch (e) {
+        // Fallback for Node/Legacy environments
+        key = process.env.API_KEY || '';
+    }
+    
+    // Fallback if import.meta didn't work but process.env might
+    if (!key && typeof process !== 'undefined' && process.env) {
+        key = process.env.API_KEY || '';
+    }
+    
     if (!key) {
-        console.warn("API Key mancante. Uso modalità Mock.");
+        console.warn("API Key mancante. Verifica il file .env (VITE_API_KEY). Uso modalità Mock.");
         return null;
     }
     return new GoogleGenAI({ apiKey: key });
@@ -56,7 +67,6 @@ export const parseCV = async (base64Data: string, mimeType: string): Promise<Par
             config: {
                 systemInstruction: "Sei un parser di CV esperto. Estrai i dati in JSON rigoroso. Sii sintetico nel summary (max 2 frasi). Se c'è una foto del volto, restituisci faceCoordinates [ymin, xmin, ymax, xmax]. Ignora soft skills generiche.",
                 responseMimeType: 'application/json',
-                maxOutputTokens: 4000, // Increased to ensure full JSON fits
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
                     type: Type.OBJECT,
@@ -113,7 +123,6 @@ export const generateJobDetails = async (title: string, department: string): Pro
             config: {
                 systemInstruction: "Genera Job Description sintetica (max 300 char) e requisiti puntati.",
                 responseMimeType: 'application/json',
-                maxOutputTokens: 1000,
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
                     type: Type.OBJECT,
@@ -153,7 +162,6 @@ export const generateScorecardSchema = async (title: string, description: string
             config: {
                 systemInstruction: "Crea 3 categorie di valutazione con 3 item ciascuna per interviste.",
                 responseMimeType: 'application/json',
-                maxOutputTokens: 2000,
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
                     type: Type.OBJECT,
@@ -224,7 +232,6 @@ export const evaluateFit = async (candidate: Candidate, job: JobPosition): Promi
             config: {
                 systemInstruction: "Valuta match candidato/job (0-100). Sii severo ma giusto. Ragionamento max 2 frasi.",
                 responseMimeType: 'application/json',
-                maxOutputTokens: 500, // Increased to avoid truncation of reasoning
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
                     type: Type.OBJECT,
@@ -265,7 +272,6 @@ export const generateOnboardingChecklist = async (jobTitle: string): Promise<{ i
             config: {
                 systemInstruction: "Crea una lista di 8-12 attività di onboarding divise per dipartimento (HR, IT, TEAM) e fase temporale (PRE_BOARDING, DAY_1, WEEK_1, MONTH_1). Rispondi in JSON.",
                 responseMimeType: 'application/json',
-                maxOutputTokens: 2000,
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
                     type: Type.OBJECT,

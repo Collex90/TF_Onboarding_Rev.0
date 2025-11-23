@@ -171,6 +171,7 @@ export interface OnboardingTask {
     department: string; // 'HR', 'IT', 'TEAM', 'ADMIN'
     phase: OnboardingPhase; // TIMELINE PHASE
     assigneeId?: string; // UID of the user responsible for this task
+    dueDate?: number; // Timestamp
     isCompleted: boolean;
 }
 
@@ -180,13 +181,15 @@ export interface OnboardingProcess {
     jobId: string;
     status: 'IN_PROGRESS' | 'COMPLETED';
     startDate: number;
+    phaseConfig?: Record<string, string>; // Maps phase enum keys to Custom Label
     tasks: OnboardingTask[];
 }
 
 export interface OnboardingTemplate {
     id: string;
     name: string;
-    tasks: Omit<OnboardingTask, 'id' | 'isCompleted' | 'assigneeId'>[]; // Template stores structure, not instance state
+    phaseConfig?: Record<string, string>; // Maps phase enum keys to Custom Label
+    tasks: Omit<OnboardingTask, 'id' | 'isCompleted'>[]; // Template stores structure + assignments/dates
     createdAt: number;
 }
 

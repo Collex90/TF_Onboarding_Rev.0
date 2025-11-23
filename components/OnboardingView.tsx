@@ -88,6 +88,14 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
 
     const modalData = getModalData();
 
+    // Helper to get phase label (Custom or Default)
+    const getPhaseLabel = (phase: OnboardingPhase, process: OnboardingProcess) => {
+        if (process.phaseConfig && process.phaseConfig[phase]) {
+            return process.phaseConfig[phase];
+        }
+        return OnboardingPhaseLabels[phase];
+    };
+
     return (
         <div className="h-full flex bg-gray-50">
             {/* LEFT SIDEBAR LIST */}
@@ -219,9 +227,9 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                 <span className="text-indigo-600 font-bold text-xs">{index + 1}</span>
                                             </div>
 
-                                            {/* Phase Header */}
+                                            {/* Phase Header - USING CUSTOM LABELS */}
                                             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                                {OnboardingPhaseLabels[phase]}
+                                                {getPhaseLabel(phase, selectedProcess)}
                                                 <span className="text-xs font-normal text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
                                                     {phaseTasks.filter(t => t.isCompleted).length}/{phaseTasks.length}
                                                 </span>
@@ -232,8 +240,12 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                 {phaseTasks.map(task => {
                                                     const assignee = allUsers.find(u => u.uid === task.assigneeId);
                                                     
+                                                    // Due Date logic
+                                                    const isOverdue = task.dueDate && Date.now() > task.dueDate && !task.isCompleted;
+                                                    const isToday = task.dueDate && new Date().toDateString() === new Date(task.dueDate).toDateString();
+
                                                     return (
-                                                        <div key={task.id} className={`bg-white rounded-xl border p-4 flex items-center gap-4 transition-all shadow-sm ${task.isCompleted ? 'border-gray-200 opacity-75' : 'border-gray-200 hover:border-indigo-300 hover:shadow-md'}`}>
+                                                        <div key={task.id} className={`bg-white rounded-xl border p-4 flex items-center gap-4 transition-all shadow-sm ${task.isCompleted ? 'border-gray-200 opacity-75' : isOverdue ? 'border-red-300' : 'border-gray-200 hover:border-indigo-300 hover:shadow-md'}`}>
                                                             <button 
                                                                 onClick={() => toggleTask(task.id, task.isCompleted)}
                                                                 className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all shrink-0 ${task.isCompleted ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-transparent hover:border-green-400'}`}
@@ -245,9 +257,18 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                                 <p className={`text-sm font-medium truncate ${task.isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
                                                                     {task.description}
                                                                 </p>
-                                                                <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
-                                                                    <span className="bg-gray-100 text-gray-600 px-1.5 rounded uppercase font-bold text-[10px]">{task.department}</span>
-                                                                </p>
+                                                                <div className="flex gap-3 mt-1">
+                                                                    <p className="text-xs text-gray-400 flex items-center gap-2">
+                                                                        <span className="bg-gray-100 text-gray-600 px-1.5 rounded uppercase font-bold text-[10px]">{task.department}</span>
+                                                                    </p>
+                                                                    {task.dueDate && (
+                                                                         <span className={`text-[10px] flex items-center gap-1 font-medium px-1.5 rounded ${isOverdue ? 'bg-red-50 text-red-600' : isToday ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-500'}`}>
+                                                                             <Calendar size={10}/> 
+                                                                             {new Date(task.dueDate).toLocaleDateString()}
+                                                                             {isOverdue && !task.isCompleted && " (Scaduto)"}
+                                                                         </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
 
                                                             {/* Assignee Selector */}

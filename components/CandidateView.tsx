@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Candidate, JobPosition, Application, User, Comment, StatusLabels, StatusColors, CandidateStatus, CandidateStatusLabels, CandidateStatusColors } from '../types';
 import { Plus, Upload, FileText, Sparkles, X, Users, Search, Pencil, UploadCloud, AlertTriangle, CheckCircle, Loader2, Trash2, Download, MessageSquare, Clock, Briefcase, Send, Building, Banknote, Eye, Maximize2, Minimize2, ZoomIn, ZoomOut, Phone, Mail, LayoutGrid, List, ChevronUp, ChevronDown, CheckSquare, Square, Star } from 'lucide-react';
@@ -318,7 +317,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         if (deleteCandidateIds.size === 0) return;
         setIsDeleting(true);
         try {
-            const promises = Array.from(deleteCandidateIds).map(id => deleteCandidate(id));
+            const promises = Array.from(deleteCandidateIds).map((id: string) => deleteCandidate(id));
             await Promise.all(promises);
             refreshData();
             setViewingCandidate(null);
@@ -336,7 +335,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     const handleBulkStatusChange = async (status: CandidateStatus) => {
         if (selectedIds.size === 0) return;
         try {
-            const promises = Array.from(selectedIds).map(id => {
+            const promises = Array.from(selectedIds).map((id: string) => {
                 const candidate = candidates.find(c => c.id === id);
                 if (candidate) {
                     return updateCandidate({ ...candidate, status });
