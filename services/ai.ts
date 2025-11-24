@@ -66,7 +66,8 @@ export const parseCV = async (base64Data: string, mimeType: string): Promise<Par
                 ]
             },
             config: {
-                systemInstruction: "Sei un parser di CV esperto. Estrai i dati in JSON rigoroso. Sii sintetico nel summary (max 2 frasi). Se c'è una foto del volto, restituisci faceCoordinates [ymin, xmin, ymax, xmax]. Ignora soft skills generiche.",
+                // MODIFIED PROMPT: Strict rules on Skills
+                systemInstruction: "Sei un parser di CV esperto. Estrai i dati in JSON rigoroso. Sii sintetico nel summary (max 2 frasi). Se c'è una foto del volto, restituisci faceCoordinates [ymin, xmin, ymax, xmax]. \n\nREGOLE SKILLS:\n1. Estrai MASSIMO 10 skills.\n2. Includi SOLO competenze tecniche rilevanti, linguaggi, framework o certificazioni.\n3. ESCLUDI ASSOLUTAMENTE software generici (es. Google Chrome, Internet Explorer, Windows, Zoom, Skype, Pacchetto Office base) e soft skills generiche (es. Problem Solving, Team Work, Puntualità) a meno che non siano centrali per ruoli specifici (es. Sales).",
                 responseMimeType: 'application/json',
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {

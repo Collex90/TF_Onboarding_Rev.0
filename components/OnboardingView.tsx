@@ -37,6 +37,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
     const [newTaskComment, setNewTaskComment] = useState('');
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const commentInputRef = useRef<HTMLTextAreaElement>(null);
+    const processCommentInputRef = useRef<HTMLTextAreaElement>(null);
 
     // Assignee Logic
     const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -47,6 +48,16 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
     useEffect(() => {
         getAllUsers().then(setAllUsers);
     }, []);
+
+    // AUTO-FOCUS ON COMMENTS TAB
+    useEffect(() => {
+        if (processTab === 'comments' && processCommentInputRef.current) {
+            // Small timeout to ensure rendering
+            setTimeout(() => {
+                processCommentInputRef.current?.focus();
+            }, 50);
+        }
+    }, [processTab]);
 
     const activeUsers = useMemo(() => allUsers.filter(u => !u.isDeleted), [allUsers]);
 
@@ -128,6 +139,15 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
         });
         setNewProcessComment('');
         refreshData();
+        // Keep focus
+        setTimeout(() => processCommentInputRef.current?.focus(), 50);
+    };
+
+    const handleProcessCommentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            handleAddProcessComment();
+        }
     };
 
     const handleAddTaskComment = async () => {
@@ -404,20 +424,23 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                         <span className="font-bold text-sm text-gray-900">{c.authorName}</span>
                                                         <span className="text-xs text-gray-500">{new Date(c.createdAt).toLocaleString()}</span>
                                                     </div>
-                                                    <p className="text-gray-700 text-sm">{c.text}</p>
+                                                    <p className="text-gray-700 text-sm whitespace-pre-wrap">{c.text}</p>
                                                 </div>
                                             ))
                                         )}
                                     </div>
-                                    <div className="bg-white p-4 rounded-xl border border-gray-200 flex gap-2">
-                                        <input 
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col gap-2">
+                                        <textarea
+                                            ref={processCommentInputRef}
                                             value={newProcessComment}
                                             onChange={e => setNewProcessComment(e.target.value)}
-                                            placeholder="Scrivi una nota generale..."
-                                            className="flex-1 bg-transparent outline-none text-sm text-gray-900"
-                                            onKeyDown={e => e.key === 'Enter' && handleAddProcessComment()}
+                                            onKeyDown={handleProcessCommentKeyDown}
+                                            placeholder="Scrivi una nota generale... (Ctrl+Invio per inviare)"
+                                            className="w-full bg-gray-50 border border-gray-100 rounded-lg p-3 outline-none text-sm text-gray-900 resize-none min-h-[80px]"
                                         />
-                                        <button onClick={handleAddProcessComment} disabled={!newProcessComment.trim()} className="text-indigo-600 font-bold text-sm disabled:opacity-50">Invia</button>
+                                        <div className="flex justify-end">
+                                            <button onClick={handleAddProcessComment} disabled={!newProcessComment.trim()} className="text-white bg-indigo-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors">Invia Commento</button>
+                                        </div>
                                     </div>
                                 </div>
                             )}
