@@ -1,7 +1,6 @@
 
-
 import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus } from '../types';
-import { db, auth } from './firebase';
+import { db, auth, storage } from './firebase';
 import { 
   collection, 
   addDoc, 
@@ -18,6 +17,7 @@ import {
   deleteDoc,
   arrayRemove
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
 import { getStoredFirebaseConfig } from './firebase';
@@ -41,6 +41,25 @@ export const generateId = (): string => {
         return crypto.randomUUID();
     }
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
+};
+
+// --- STORAGE HELPER ---
+const base64ToBlob = (base64: string, mimeType: string) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+};
+
+const uploadBase64 = async (path: string, base64: string, mimeType: string): Promise<string> => {
+    if (!storage) throw new Error("Storage not initialized");
+    const blob = base64ToBlob(base64, mimeType);
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, blob);
+    return await getDownloadURL(storageRef);
 };
 
 // --- SANITIZATION HELPER FOR FIRESTORE ---
@@ -387,6 +406,34 @@ export const restoreDatabase = async (backupData: AppState) => {
 
 export const addCandidate = async (candidate: Candidate) => {
   if (db) {
+    if (storage) {
+        // Handle CV
+        if (candidate.cvFileBase64 && !candidate.cvUrl) {
+            try {
+                candidate.cvUrl = await uploadBase64(`candidates/${candidate.id}/cv`, candidate.cvFileBase64, candidate.cvMimeType || 'application/pdf');
+                candidate.cvFileBase64 = undefined; // Optimization: Don't store Base64 in Firestore
+            } catch (e) { console.error("CV Upload Failed", e); }
+        }
+        // Handle Photo
+        if (candidate.photo && !candidate.photoUrl) {
+            try {
+                candidate.photoUrl = await uploadBase64(`candidates/${candidate.id}/photo`, candidate.photo, 'image/jpeg');
+                candidate.photo = undefined; // Optimization
+            } catch (e) { console.error("Photo Upload Failed", e); }
+        }
+        // Handle Attachments
+        if (candidate.attachments) {
+            for (let i = 0; i < candidate.attachments.length; i++) {
+                const att = candidate.attachments[i];
+                if (att.dataBase64 && !att.url) {
+                    try {
+                        att.url = await uploadBase64(`candidates/${candidate.id}/attachments/${att.id}`, att.dataBase64, att.type);
+                        att.dataBase64 = undefined;
+                    } catch (e) { console.error("Attachment Upload Failed", e); }
+                }
+            }
+        }
+    }
     await setDoc(doc(db, 'candidates', candidate.id), sanitizeForFirestore(candidate));
   } else {
     const data = getLocalData();
@@ -398,6 +445,25 @@ export const addCandidate = async (candidate: Candidate) => {
 
 export const updateCandidate = async (candidate: Candidate) => {
   if (db) {
+    if (storage) {
+        if (candidate.cvFileBase64 && !candidate.cvUrl) {
+             candidate.cvUrl = await uploadBase64(`candidates/${candidate.id}/cv`, candidate.cvFileBase64, candidate.cvMimeType || 'application/pdf');
+             candidate.cvFileBase64 = undefined;
+        }
+        if (candidate.photo && !candidate.photoUrl) {
+             candidate.photoUrl = await uploadBase64(`candidates/${candidate.id}/photo`, candidate.photo, 'image/jpeg');
+             candidate.photo = undefined;
+        }
+        if (candidate.attachments) {
+            for (let i = 0; i < candidate.attachments.length; i++) {
+                const att = candidate.attachments[i];
+                if (att.dataBase64 && !att.url) {
+                     att.url = await uploadBase64(`candidates/${candidate.id}/attachments/${att.id}`, att.dataBase64, att.type);
+                     att.dataBase64 = undefined;
+                }
+            }
+        }
+    }
     await setDoc(doc(db, 'candidates', candidate.id), sanitizeForFirestore(candidate), { merge: true });
   } else {
     const data = getLocalData();
@@ -454,6 +520,10 @@ export const addCandidateComment = async (candidateId: string, comment: Comment)
 
 export const addCandidateAttachment = async (candidateId: string, attachment: Attachment) => {
     if(db) {
+        if (storage && attachment.dataBase64) {
+             attachment.url = await uploadBase64(`candidates/${candidateId}/attachments/${attachment.id}`, attachment.dataBase64, attachment.type);
+             attachment.dataBase64 = undefined;
+        }
         await updateDoc(doc(db, 'candidates', candidateId), {
             attachments: arrayUnion(sanitizeForFirestore(attachment))
         });
@@ -475,9 +545,15 @@ export const deleteCandidateAttachment = async (candidateId: string, attachmentI
         const snap = await getDoc(candRef);
         if (snap.exists()) {
             const data = snap.data();
-            // Filter out the attachment instead of using arrayRemove (which relies on object equality)
             const updatedAttachments = (data.attachments || []).filter((a: any) => a.id !== attachmentId);
             await updateDoc(candRef, { attachments: updatedAttachments });
+            // Optionally delete from storage if url exists
+            if (storage) {
+                try {
+                    const storageRef = ref(storage, `candidates/${candidateId}/attachments/${attachmentId}`);
+                    await deleteObject(storageRef);
+                } catch(e) { /* ignore if not exists */ }
+            }
         }
     } else {
         const data = getLocalData();
@@ -673,6 +749,12 @@ export const addTaskComment = async (processId: string, taskId: string, comment:
 };
 
 export const addTaskAttachment = async (processId: string, taskId: string, attachment: Attachment, tasks: OnboardingTask[]) => {
+    if (db && storage && attachment.dataBase64) {
+        try {
+            attachment.url = await uploadBase64(`onboarding/${processId}/tasks/${taskId}/${attachment.id}`, attachment.dataBase64, attachment.type);
+            attachment.dataBase64 = undefined;
+        } catch(e) { console.error(e); }
+    }
     const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, attachments: [...(t.attachments || []), attachment] } : t);
     await updateOnboardingTask(processId, updatedTasks, false);
 };
@@ -685,6 +767,11 @@ export const deleteTaskAttachment = async (processId: string, taskId: string, at
         return t;
     });
     await updateOnboardingTask(processId, updatedTasks, false);
+    if(db && storage) {
+        try {
+            await deleteObject(ref(storage, `onboarding/${processId}/tasks/${taskId}/${attachmentId}`));
+        } catch(e) {}
+    }
 };
 
 export const deleteOnboardingProcess = async (id: string) => {
@@ -698,8 +785,7 @@ export const deleteOnboardingProcess = async (id: string) => {
     }
 }
 
-// --- ONBOARDING TEMPLATES ---
-
+// ... rest of the file (Templates, Email, Seed) kept as is ...
 export const saveOnboardingTemplate = async (template: OnboardingTemplate) => {
     if (db) {
         await setDoc(doc(db, 'onboardingTemplates', template.id), sanitizeForFirestore(template));
@@ -761,6 +847,7 @@ export const getEmailTemplates = (): EmailTemplate[] => [
 ];
 
 export const seedDatabase = async (assignToUserId?: string) => {
+    // Keep seed data simple (no storage needed for mock)
     // Fallback to auth.currentUser if no ID is passed
     const targetUserId = assignToUserId || auth?.currentUser?.uid;
     
@@ -782,6 +869,7 @@ export const seedDatabase = async (assignToUserId?: string) => {
             createdAt: Date.now(),
             comments: []
         },
+        // ... rest of seed data same as original file ...
         {
             id: 'c2',
             fullName: 'Marco Bianchi',

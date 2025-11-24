@@ -46,7 +46,7 @@ const PdfPage: React.FC<{ pdf: any, pageNumber: number, scale: number }> = ({ pd
     return <canvas ref={canvasRef} className="shadow-md rounded bg-white mb-4 block" />;
 };
 
-const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mimeType }) => {
+const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> = ({ base64, mimeType, url }) => {
     const [pdfDoc, setPdfDoc] = useState<any>(null);
     const [scale, setScale] = useState(0.6);
     const [numPages, setNumPages] = useState(0);
@@ -60,15 +60,24 @@ const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mi
             if (!mimeType.includes('pdf')) return;
             setLoading(true);
             try {
-                const binaryString = window.atob(base64);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                }
                 const pdfjs = (window as any).pdfjsLib;
                 if (!pdfjs) throw new Error("PDF Lib not found");
-                const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+                
+                let pdf;
+                if (url) {
+                    pdf = await pdfjs.getDocument(url).promise;
+                } else if (base64) {
+                    const binaryString = window.atob(base64);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    pdf = await pdfjs.getDocument({ data: bytes }).promise;
+                } else {
+                     throw new Error("No source");
+                }
+                
                 setPdfDoc(pdf);
                 setNumPages(pdf.numPages);
             } catch (e: any) {
@@ -79,7 +88,7 @@ const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mi
             }
         };
         loadPdf();
-    }, [base64, mimeType]);
+    }, [base64, mimeType, url]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -103,7 +112,13 @@ const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mi
                     {error && <div className="text-red-500 bg-white p-4 rounded shadow">{error}</div>}
                     
                     {!mimeType.includes('pdf') ? (
-                        <img src={`data:${mimeType};base64,${base64}`} className="shadow-lg rounded bg-white transition-all duration-75 ease-linear block" style={{ width: imgDimensions.width ? `${imgDimensions.width * scale}px` : 'auto', maxWidth: 'none' }} onLoad={(e) => setImgDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} alt="Preview" />
+                        <img 
+                            src={url || `data:${mimeType};base64,${base64}`} 
+                            className="shadow-lg rounded bg-white transition-all duration-75 ease-linear block" 
+                            style={{ width: imgDimensions.width ? `${imgDimensions.width * scale}px` : 'auto', maxWidth: 'none' }} 
+                            onLoad={(e) => setImgDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} 
+                            alt="Preview" 
+                        />
                     ) : (
                         pdfDoc && (<div className="flex flex-col items-center">{Array.from(new Array(numPages), (el, index) => (<PdfPage key={index} pdf={pdfDoc} pageNumber={index + 1} scale={scale} />))}</div>)
                     )}
@@ -269,13 +284,26 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     const downloadCV = (e: React.MouseEvent, candidate: Candidate) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!candidate.cvFileBase64 || !candidate.cvMimeType) return;
-        const link = document.createElement('a');
-        link.href = `data:${candidate.cvMimeType};base64,${candidate.cvFileBase64}`;
-        link.download = `${candidate.fullName.replace(/\s+/g, '_')}_CV`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        
+        if (candidate.cvUrl) {
+            const link = document.createElement('a');
+            link.href = candidate.cvUrl;
+            link.target = '_blank';
+            // link.download = ... // won't verify work cross-origin
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return;
+        }
+
+        if (candidate.cvFileBase64 && candidate.cvMimeType) {
+            const link = document.createElement('a');
+            link.href = `data:${candidate.cvMimeType};base64,${candidate.cvFileBase64}`;
+            link.download = `${candidate.fullName.replace(/\s+/g, '_')}_CV`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     };
 
     const requestDelete = (e: React.MouseEvent, candidateId: string) => {
@@ -403,13 +431,14 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                     createdAt: Date.now()
                 };
                 await addCandidateAttachment(viewingCandidate.id, attachment);
-                // Local optimistic update
-                setViewingCandidate(prev => prev ? { ...prev, attachments: [...(prev.attachments || []), attachment] } : null);
+                // Local optimistic update (note: won't have URL until refresh unless we wait)
+                // For better UX we trigger refresh immediately
             };
             reader.readAsDataURL(file);
         }
         
-        refreshData();
+        // Timeout to allow upload processing
+        setTimeout(refreshData, 1000);
         if(attachmentInputRef.current) attachmentInputRef.current.value = '';
     };
 
@@ -601,7 +630,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                 className="absolute top-4 right-4 flex gap-1 z-50 bg-white/90 backdrop-blur-sm p-1 rounded-lg border border-gray-100 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex-nowrap" 
                                 onClick={e => e.stopPropagation()}
                             >
-                                {candidate.cvFileBase64 && (
+                                {(candidate.cvUrl || candidate.cvFileBase64) && (
                                     <button 
                                         type="button"
                                         onClick={(e) => downloadCV(e, candidate)}
@@ -631,8 +660,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
 
                             <div className="flex items-start gap-4 mb-4 mt-6">
                                 <div className="w-14 h-14 rounded-full shrink-0 shadow-inner border border-white overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-                                    {candidate.photo ? (
-                                        <img src={`data:image/jpeg;base64,${candidate.photo}`} alt={candidate.fullName} className="w-full h-full object-cover" />
+                                    {candidate.photoUrl || candidate.photo ? (
+                                        <img src={candidate.photoUrl || `data:image/jpeg;base64,${candidate.photo}`} alt={candidate.fullName} className="w-full h-full object-cover" />
                                     ) : (
                                         <span className="text-xl font-bold text-indigo-600">{candidate.fullName.charAt(0)}</span>
                                     )}
@@ -703,7 +732,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                             </td>
                                             <td className="p-4 font-medium text-gray-900 flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200 shrink-0">
-                                                    {candidate.photo ? <img src={`data:image/jpeg;base64,${candidate.photo}`} className="w-full h-full object-cover"/> : candidate.fullName.charAt(0)}
+                                                    {candidate.photoUrl || candidate.photo ? <img src={candidate.photoUrl || `data:image/jpeg;base64,${candidate.photo}`} className="w-full h-full object-cover"/> : candidate.fullName.charAt(0)}
                                                 </div>
                                                 {candidate.fullName}
                                             </td>
@@ -845,7 +874,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                 <div className="p-6 border-b border-gray-100 bg-gray-50 shrink-0">
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-16 h-16 rounded-full bg-white border border-gray-200 overflow-hidden shadow-sm flex items-center justify-center cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all" onClick={() => setIsPhotoZoomed(true)}>{viewingCandidate.photo ? <img src={`data:image/jpeg;base64,${viewingCandidate.photo}`} className="w-full h-full object-cover"/> : <span className="text-2xl font-bold text-indigo-600">{viewingCandidate.fullName.charAt(0)}</span>}</div>
+                                            <div className="w-16 h-16 rounded-full bg-white border border-gray-200 overflow-hidden shadow-sm flex items-center justify-center cursor-zoom-in hover:ring-2 hover:ring-indigo-400 transition-all" onClick={() => setIsPhotoZoomed(true)}>{viewingCandidate.photoUrl || viewingCandidate.photo ? <img src={viewingCandidate.photoUrl || `data:image/jpeg;base64,${viewingCandidate.photo}`} className="w-full h-full object-cover"/> : <span className="text-2xl font-bold text-indigo-600">{viewingCandidate.fullName.charAt(0)}</span>}</div>
                                             <div>
                                                 <h2 className="text-2xl font-bold text-gray-900">{viewingCandidate.fullName}</h2>
                                                 <div className="flex items-center gap-2 mt-1 text-gray-500 text-sm"><Mail size={14}/> {viewingCandidate.email}</div>
@@ -914,7 +943,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
 
                                             <div><h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Summary</h4><p className="text-sm text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-xl border border-gray-100 italic">{viewingCandidate.summary}</p></div>
                                             
-                                            {viewingCandidate.cvFileBase64 && (
+                                            {(viewingCandidate.cvUrl || viewingCandidate.cvFileBase64) && (
                                                 <div className="pt-4 border-t border-gray-100">
                                                     <button onClick={() => setIsCvPreviewOpen(!isCvPreviewOpen)} className={`w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-colors border font-medium ${isCvPreviewOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
                                                         {isCvPreviewOpen ? <Minimize2 size={18}/> : <Maximize2 size={18}/>} {isCvPreviewOpen ? 'Chiudi Anteprima' : 'Apri Anteprima CV'}
@@ -972,7 +1001,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                                                     {getFileIcon(file.type)}
                                                                 </div>
                                                                 <div className="flex gap-1">
-                                                                    <a href={`data:${file.type};base64,${file.dataBase64}`} download={file.name} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Download size={16}/></a>
+                                                                    <a href={file.url || `data:${file.type};base64,${file.dataBase64}`} download={file.name} target="_blank" className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Download size={16}/></a>
                                                                     {(currentUser?.role === UserRole.ADMIN || file.uploadedBy === currentUser?.name) && (
                                                                         <button 
                                                                             onClick={() => handleDeleteAttachment(file.id)}
@@ -998,14 +1027,14 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                             </div>
 
                             {/* RIGHT PREVIEW */}
-                            {isCvPreviewOpen && viewingCandidate.cvFileBase64 && viewingCandidate.cvMimeType && (
+                            {isCvPreviewOpen && (viewingCandidate.cvUrl || viewingCandidate.cvFileBase64) && viewingCandidate.cvMimeType && (
                                 <div className="flex-1 bg-gray-100 h-full flex flex-col overflow-hidden relative border-l border-gray-200">
                                     <div className="p-3 bg-white border-b border-gray-200 flex justify-between items-center shadow-sm z-10">
                                         <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><FileText size={16}/> Anteprima Documento</span>
                                         <button onClick={() => setIsCvPreviewOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
                                     </div>
                                     <div className="flex-1 relative overflow-hidden">
-                                        <PdfPreview base64={viewingCandidate.cvFileBase64} mimeType={viewingCandidate.cvMimeType} />
+                                        <PdfPreview url={viewingCandidate.cvUrl} base64={viewingCandidate.cvFileBase64} mimeType={viewingCandidate.cvMimeType} />
                                     </div>
                                 </div>
                             )}

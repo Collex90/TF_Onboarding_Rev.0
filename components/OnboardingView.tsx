@@ -1,8 +1,7 @@
 
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppState, OnboardingProcess, OnboardingTask, User, OnboardingPhase, OnboardingPhaseLabels, OnboardingStatus, OnboardingStatusLabels, OnboardingStatusColors, UserRole, Comment, Attachment } from '../types';
-import { CheckCircle, Circle, Clock, Trash2, Search, Flag, Plus, Sparkles, Loader2, X, User as UserIcon, Calendar, ChevronRight, Filter, MessageSquare, Paperclip, FileText, Download, Send, Table, Image } from 'lucide-react';
+import { CheckCircle, Circle, Clock, Trash2, Search, Flag, Plus, Sparkles, Loader2, X, User as UserIcon, Calendar, ChevronRight, Filter, MessageSquare, Paperclip, FileText, Download, Send, Table, Image, GripVertical } from 'lucide-react';
 import { updateOnboardingTask, deleteOnboardingProcess, generateId, createOnboardingProcess, getAllUsers, updateOnboardingStatus, addOnboardingComment, addTaskComment, addTaskAttachment, deleteTaskAttachment } from '../services/storage';
 import { generateOnboardingChecklist } from '../services/ai';
 import { OnboardingSetupModal } from './OnboardingSetupModal';
@@ -22,6 +21,7 @@ const getFileIcon = (mimeType: string) => {
 };
 
 export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshData, currentUser }) => {
+    // ... all component logic ...
     const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<OnboardingStatus[]>([]);
@@ -169,7 +169,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
             reader.readAsDataURL(file);
         }
         
-        refreshData();
+        // Refresh with a delay for upload to complete
+        setTimeout(refreshData, 1500);
         if(attachmentInputRef.current) attachmentInputRef.current.value = '';
     };
 
@@ -195,7 +196,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
 
     return (
         <div className="flex h-full bg-gray-50">
-            {/* LEFT SIDEBAR: PROCESS LIST */}
+            {/* ... Sidebar ... */}
             <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full shrink-0">
                 <div className="p-4 border-b border-gray-100">
                     <h2 className="text-xl font-bold text-gray-900 mb-4">Onboarding</h2>
@@ -276,7 +277,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                 </div>
             </div>
 
-            {/* MAIN CONTENT: PROCESS DETAILS */}
+            {/* MAIN CONTENT */}
             <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
                 {selectedProcess && selectedCandidate && selectedJob ? (
                     <>
@@ -337,7 +338,6 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                 <div className="max-w-4xl mx-auto space-y-8 pb-10">
                                     {[OnboardingPhase.PRE_BOARDING, OnboardingPhase.DAY_1, OnboardingPhase.WEEK_1, OnboardingPhase.MONTH_1].map(phase => {
                                         const tasks = selectedProcess.tasks.filter(t => t.phase === phase);
-                                        // Use custom label from process config or fallback to default
                                         const label = (selectedProcess.phaseConfig && selectedProcess.phaseConfig[phase]) || OnboardingPhaseLabels[phase];
                                         
                                         if (tasks.length === 0) return null;
@@ -552,7 +552,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                         </div>
                                                     </div>
                                                     <div className="flex gap-2">
-                                                        <a href={`data:${file.type};base64,${file.dataBase64}`} download={file.name} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded">
+                                                        <a href={file.url || `data:${file.type};base64,${file.dataBase64}`} download={file.name} target="_blank" className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded">
                                                             <Download size={16}/>
                                                         </a>
                                                         {(currentUser?.role === UserRole.ADMIN || file.uploadedBy === currentUser?.name) && (
@@ -574,9 +574,9 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                     </div>
                 </div>
             )}
-
-            {/* SETUP MODAL: Using a mocked empty candidate/job to allow manual creation from scratch if needed, though typically triggered from recruitment */}
-            {isSetupModalOpen && (
+            
+            {/* SETUP MODAL: Using a mocked empty candidate/job to allow manual creation from scratch if needed */}
+             {isSetupModalOpen && (
                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
                     <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full text-center">
                         <Sparkles size={48} className="mx-auto text-indigo-200 mb-4"/>

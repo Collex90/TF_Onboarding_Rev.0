@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const CONFIG_KEY = 'talentflow_firebase_config';
 
@@ -58,12 +59,14 @@ export const removeFirebaseConfig = () => {
   // Reset instances
   db = null;
   auth = null;
+  storage = null;
   // Se ci sono variabili d'ambiente, reinizializzerà quelle al reload, 
   // ma rimuovendo dal localstorage puliamo l'override manuale.
 };
 
 let db: Firestore | null = null;
 let auth: Auth | null = null;
+let storage: FirebaseStorage | null = null;
 
 export const initFirebase = () => {
   // Priorità: 1. Configurazione Manuale (LocalStorage) -> 2. Variabili d'Ambiente (Vercel)
@@ -77,20 +80,25 @@ export const initFirebase = () => {
       const app = !getApps().length ? initializeApp(config) : getApp();
       db = getFirestore(app);
       auth = getAuth(app);
+      if (config.storageBucket) {
+        storage = getStorage(app);
+      }
       console.log("Firebase initialized successfully");
     } catch (e) {
       console.error("Failed to initialize Firebase", e);
       db = null;
       auth = null;
+      storage = null;
     }
   } else {
       db = null;
       auth = null;
+      storage = null;
   }
-  return { db, auth };
+  return { db, auth, storage };
 };
 
 // Initialize on load
 initFirebase();
 
-export { db, auth };
+export { db, auth, storage };

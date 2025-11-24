@@ -74,7 +74,8 @@ export interface Attachment {
     id: string;
     name: string;
     type: string; // mimeType
-    dataBase64: string;
+    dataBase64?: string; // Optional if url is present
+    url?: string; // Firebase Storage URL
     uploadedBy: string;
     createdAt: number;
 }
@@ -87,9 +88,14 @@ export interface Candidate {
   age?: number;
   skills: string[];
   summary: string;
-  photo?: string; // Base64 of the cropped face
-  cvFileBase64?: string;
+  
+  photo?: string; // Base64 (legacy/local)
+  photoUrl?: string; // Storage URL
+  
+  cvFileBase64?: string; // Base64 (legacy/local)
+  cvUrl?: string; // Storage URL
   cvMimeType?: string;
+  
   comments?: Comment[];
   attachments?: Attachment[];
   
