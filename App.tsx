@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { CandidateView } from './components/CandidateView';
@@ -141,7 +142,6 @@ function App() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [firebaseInitialized, setFirebaseInitialized] = useState(0);
   const [authInstance, setAuthInstance] = useState<any>(null);
-  const [hasAutoSeeded, setHasAutoSeeded] = useState(false);
 
   // Initialization
   useEffect(() => {
@@ -223,19 +223,8 @@ function App() {
     return () => unsubscribe();
   }, [user, refreshTrigger, firebaseInitialized]); 
 
-  // AUTO-SEED DEMO DATA
-  useEffect(() => {
-      if (user && !loadingData && data.candidates.length === 0 && !hasAutoSeeded) {
-          // If DB is empty and we haven't seeded yet, do it automatically
-          const autoSeed = async () => {
-              console.log("Auto-seeding demo data for user:", user.uid);
-              await seedDatabase(user.uid);
-              setHasAutoSeeded(true);
-              setRefreshTrigger(p => p + 1); // Force refresh
-          };
-          autoSeed();
-      }
-  }, [user, loadingData, data.candidates.length, hasAutoSeeded]);
+  // NOTE: Auto-seeding logic removed for Production usage. 
+  // Use "Generate Demo Data" in Settings manually if needed.
 
   const handleConfigChange = () => {
       const { auth: a } = initFirebase();
