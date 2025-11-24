@@ -18,7 +18,7 @@ import {
   deleteDoc,
   arrayRemove
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata, uploadString } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata, uploadString, getBytes } from 'firebase/storage';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
 import { getStoredFirebaseConfig } from './firebase';
@@ -474,11 +474,18 @@ export const getCloudBackups = async (): Promise<BackupMetadata[]> => {
 export const restoreFromCloud = async (fullPath: string) => {
     if (!storage) throw new Error("Storage not active");
     const storageRef = ref(storage, fullPath);
-    const url = await getDownloadURL(storageRef);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Failed to download backup file");
-    const jsonData = await response.json();
-    await restoreDatabase(jsonData);
+
+    // FIX CORS ISSUE: Use getBytes instead of fetch(url)
+    try {
+        const buffer = await getBytes(storageRef);
+        // Decode ArrayBuffer to String
+        const text = new TextDecoder().decode(buffer);
+        const jsonData = JSON.parse(text);
+        await restoreDatabase(jsonData);
+    } catch (e: any) {
+         console.error("Restore failed", e);
+         throw new Error("Impossibile scaricare il backup (Problema di Rete/CORS): " + e.message);
+    }
 };
 
 // --- RECYCLE BIN (SOFT DELETE MANAGE) ---
