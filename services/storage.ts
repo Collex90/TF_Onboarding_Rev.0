@@ -1,5 +1,5 @@
 
-import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate } from '../types';
+import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo } from '../types';
 import { db, auth } from './firebase';
 import { 
   collection, 
@@ -20,12 +20,14 @@ import {
 const STORAGE_KEY = 'talentflow_data_v1';
 const TEMPLATES_KEY = 'talentflow_scorecard_templates';
 const ONBOARDING_TEMPLATES_KEY = 'talentflow_onboarding_templates';
+const COMPANY_INFO_KEY = 'talentflow_company_info';
 
 const defaultState: AppState = {
   candidates: [],
   jobs: [],
   applications: [],
-  onboarding: []
+  onboarding: [],
+  companyInfo: { name: '', industry: '', description: '' }
 };
 
 // Helper for ID generation
@@ -60,13 +62,47 @@ const sanitizeForFirestore = (obj: any): any => {
 // --- LOCAL STORAGE HELPERS ---
 const getLocalData = (): AppState => {
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return { ...defaultState };
-  try { return JSON.parse(stored); } catch { return { ...defaultState }; }
+  const companyStored = localStorage.getItem(COMPANY_INFO_KEY);
+  
+  let state = { ...defaultState };
+  if (stored) {
+      try { state = { ...state, ...JSON.parse(stored) }; } catch {}
+  }
+  if (companyStored) {
+      try { state.companyInfo = JSON.parse(companyStored); } catch {}
+  }
+  return state;
 };
 
 const saveLocalData = (data: AppState) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  if (data.companyInfo) {
+      localStorage.setItem(COMPANY_INFO_KEY, JSON.stringify(data.companyInfo));
+  }
 };
+
+// --- COMPANY INFO ---
+
+export const updateCompanyInfo = async (info: CompanyInfo) => {
+    if (db) {
+        // Store in a dedicated document settings/company
+        await setDoc(doc(db, 'settings', 'company'), sanitizeForFirestore(info));
+    } else {
+        localStorage.setItem(COMPANY_INFO_KEY, JSON.stringify(info));
+        window.dispatchEvent(new Event('talentflow-local-update'));
+    }
+};
+
+export const getCompanyInfo = async (): Promise<CompanyInfo | undefined> => {
+    if (db) {
+        const snap = await getDoc(doc(db, 'settings', 'company'));
+        if (snap.exists()) return snap.data() as CompanyInfo;
+        return undefined;
+    } else {
+        const stored = localStorage.getItem(COMPANY_INFO_KEY);
+        return stored ? JSON.parse(stored) : undefined;
+    }
+}
 
 // --- USER MANAGEMENT ---
 
@@ -195,6 +231,7 @@ export const subscribeToData = (user: User | null, callback: (data: AppState) =>
 
     const qApps = query(collection(db, 'applications'));
     const qOnboarding = query(collection(db, 'onboarding'));
+    const docCompany = doc(db, 'settings', 'company');
 
     const handleError = (err: any) => {
         console.error("Firestore subscription error:", err);
@@ -215,12 +252,14 @@ export const subscribeToData = (user: User | null, callback: (data: AppState) =>
     const unsubJobs = onSnapshot(qJobs, safeCallback, handleError);
     const unsubApps = onSnapshot(qApps, safeCallback, handleError);
     const unsubOnboarding = onSnapshot(qOnboarding, safeCallback, handleError);
+    const unsubCompany = onSnapshot(docCompany, safeCallback, handleError);
 
     return () => {
         unsubCandidates();
         unsubJobs();
         unsubApps();
         unsubOnboarding();
+        unsubCompany();
     };
   }
 
@@ -250,18 +289,20 @@ const refreshFullStateFromFirebase = async (user: User | null, callback: (data: 
             qJobs = query(collection(db, 'jobs'));
         }
 
-        const [cSnap, jSnap, aSnap, oSnap] = await Promise.all([
+        const [cSnap, jSnap, aSnap, oSnap, companySnap] = await Promise.all([
             getDocs(collection(db, 'candidates')),
             getDocs(qJobs),
             getDocs(collection(db, 'applications')),
-            getDocs(collection(db, 'onboarding'))
+            getDocs(collection(db, 'onboarding')),
+            getDoc(doc(db, 'settings', 'company'))
         ]);
 
         cachedState = {
             candidates: cSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Candidate)).filter(c => !c.isDeleted),
             jobs: jSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as JobPosition)),
             applications: aSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Application)).filter(a => !a.isDeleted),
-            onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess))
+            onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess)),
+            companyInfo: companySnap.exists() ? companySnap.data() as CompanyInfo : undefined
         };
         callback(cachedState);
     } catch (e) {
@@ -274,17 +315,19 @@ const refreshFullStateFromFirebase = async (user: User | null, callback: (data: 
 
 export const getFullDatabase = async (): Promise<AppState> => {
     if (db) {
-        const [cSnap, jSnap, aSnap, oSnap] = await Promise.all([
+        const [cSnap, jSnap, aSnap, oSnap, compSnap] = await Promise.all([
             getDocs(collection(db, 'candidates')),
             getDocs(collection(db, 'jobs')),
             getDocs(collection(db, 'applications')),
-            getDocs(collection(db, 'onboarding'))
+            getDocs(collection(db, 'onboarding')),
+            getDoc(doc(db, 'settings', 'company'))
         ]);
         return {
             candidates: cSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Candidate)),
             jobs: jSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as JobPosition)),
             applications: aSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Application)),
-            onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess))
+            onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess)),
+            companyInfo: compSnap.exists() ? compSnap.data() as CompanyInfo : undefined
         };
     } else {
         return getLocalData();
@@ -314,6 +357,11 @@ export const restoreDatabase = async (backupData: AppState) => {
             });
             await batch.commit();
         }
+
+        if (backupData.companyInfo) {
+            await setDoc(doc(db, 'settings', 'company'), sanitizeForFirestore(backupData.companyInfo));
+        }
+
     } else {
         saveLocalData(backupData);
         window.dispatchEvent(new Event('talentflow-local-update'));
@@ -858,7 +906,8 @@ export const seedDatabase = async (assignToUserId?: string) => {
             candidates: mockCandidates,
             jobs: mockJobs,
             applications: mockApplications,
-            onboarding: []
+            onboarding: [],
+            companyInfo: defaultState.companyInfo
         };
         saveLocalData(demoState);
         window.dispatchEvent(new Event('talentflow-local-update'));

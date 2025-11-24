@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { Candidate, JobPosition, ScorecardSchema, OnboardingPhase } from "../types";
+import { Candidate, JobPosition, ScorecardSchema, OnboardingPhase, CompanyInfo } from "../types";
 
 // Initialize the client safely handling both Vite and legacy envs
 const getAI = () => {
@@ -106,7 +107,7 @@ export const parseCV = async (base64Data: string, mimeType: string): Promise<Par
     }
 };
 
-export const generateJobDetails = async (title: string, department: string): Promise<{ description: string, requirements: string }> => {
+export const generateJobDetails = async (title: string, department: string, companyContext?: CompanyInfo): Promise<{ description: string, requirements: string }> => {
     const ai = getAI();
     
     const mockJob = {
@@ -116,12 +117,17 @@ export const generateJobDetails = async (title: string, department: string): Pro
 
     if (!ai) return mockJob;
 
+    let systemInstruction = "Genera Job Description sintetica (max 300 char) e requisiti puntati.";
+    if (companyContext && companyContext.name) {
+        systemInstruction = `Sei un HR Manager per l'azienda ${companyContext.name} operante nel settore ${companyContext.industry}. Descrizione azienda: "${companyContext.description}". Genera una Job Description e Requisiti specifici per questa realtà.`;
+    }
+
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `Job: ${title} (${department})`,
             config: {
-                systemInstruction: "Genera Job Description sintetica (max 300 char) e requisiti puntati.",
+                systemInstruction,
                 responseMimeType: 'application/json',
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
@@ -144,7 +150,7 @@ export const generateJobDetails = async (title: string, department: string): Pro
     }
 };
 
-export const generateScorecardSchema = async (title: string, description: string): Promise<ScorecardSchema> => {
+export const generateScorecardSchema = async (title: string, description: string, companyContext?: CompanyInfo): Promise<ScorecardSchema> => {
     const ai = getAI();
     
     const mockSchema: ScorecardSchema = {
@@ -155,12 +161,17 @@ export const generateScorecardSchema = async (title: string, description: string
 
     if (!ai) return mockSchema;
 
+    let systemInstruction = "Crea 3 categorie di valutazione con 3 item ciascuna per interviste.";
+    if (companyContext && companyContext.name) {
+        systemInstruction = `Crea una scheda di valutazione per ${companyContext.name} (${companyContext.industry}). Le domande e i criteri devono riflettere i valori aziendali: ${companyContext.description}.`;
+    }
+
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `Scorecard per: ${title}. Desc: ${description.substring(0, 200)}`,
             config: {
-                systemInstruction: "Crea 3 categorie di valutazione con 3 item ciascuna per interviste.",
+                systemInstruction,
                 responseMimeType: 'application/json',
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
@@ -204,7 +215,7 @@ export const generateScorecardSchema = async (title: string, description: string
     }
 };
 
-export const evaluateFit = async (candidate: Candidate, job: JobPosition): Promise<{ score: number, reasoning: string }> => {
+export const evaluateFit = async (candidate: Candidate, job: JobPosition, companyContext?: CompanyInfo): Promise<{ score: number, reasoning: string }> => {
     const ai = getAI();
 
     const mockEval = {
@@ -213,6 +224,11 @@ export const evaluateFit = async (candidate: Candidate, job: JobPosition): Promi
     };
 
     if (!ai) return mockEval;
+
+    let systemInstruction = "Valuta match candidato/job (0-100). Sii severo ma giusto. Ragionamento max 2 frasi.";
+    if (companyContext && companyContext.name) {
+        systemInstruction = `Valuta il candidato per ${companyContext.name} (${companyContext.industry}). Contesto Aziendale: ${companyContext.description}. Oltre alle hard skill, valuta se l'esperienza pregressa del candidato è in settori affini a quello dell'azienda.`;
+    }
 
     // TOKEN OPTIMIZATION: Truncate large fields
     const prompt = `
@@ -230,7 +246,7 @@ export const evaluateFit = async (candidate: Candidate, job: JobPosition): Promi
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                systemInstruction: "Valuta match candidato/job (0-100). Sii severo ma giusto. Ragionamento max 2 frasi.",
+                systemInstruction,
                 responseMimeType: 'application/json',
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
@@ -253,7 +269,7 @@ export const evaluateFit = async (candidate: Candidate, job: JobPosition): Promi
     }
 };
 
-export const generateOnboardingChecklist = async (jobTitle: string): Promise<{ items: { department: string, task: string, phase: OnboardingPhase }[] }> => {
+export const generateOnboardingChecklist = async (jobTitle: string, companyContext?: CompanyInfo): Promise<{ items: { department: string, task: string, phase: OnboardingPhase }[] }> => {
     const ai = getAI();
     const fallback = { 
         items: [
@@ -265,12 +281,17 @@ export const generateOnboardingChecklist = async (jobTitle: string): Promise<{ i
 
     if (!ai) return fallback;
 
+    let systemInstruction = "Crea una lista di 8-12 attività di onboarding divise per dipartimento (HR, IT, TEAM) e fase temporale (PRE_BOARDING, DAY_1, WEEK_1, MONTH_1). Rispondi in JSON.";
+    if (companyContext && companyContext.name) {
+        systemInstruction = `Crea un piano di onboarding specifico per ${companyContext.name} (${companyContext.industry}). Considera la descrizione: ${companyContext.description}. Includi task culturali specifici per questa azienda.`;
+    }
+
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `Genera checklist onboarding per: ${jobTitle}`,
             config: {
-                systemInstruction: "Crea una lista di 8-12 attività di onboarding divise per dipartimento (HR, IT, TEAM) e fase temporale (PRE_BOARDING, DAY_1, WEEK_1, MONTH_1). Rispondi in JSON.",
+                systemInstruction,
                 responseMimeType: 'application/json',
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {

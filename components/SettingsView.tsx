@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users } from 'lucide-react';
-import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, deleteUser } from '../services/storage';
+import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, Building2 } from 'lucide-react';
+import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, deleteUser, updateCompanyInfo, getCompanyInfo } from '../services/storage';
 import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig } from '../services/firebase';
-import { AppState, User, UserRole } from '../types';
+import { AppState, User, UserRole, CompanyInfo } from '../types';
 
 interface SettingsViewProps {
     refreshData: () => void;
@@ -31,6 +31,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
     const [users, setUsers] = useState<User[]>([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
+    // Company Info State
+    const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({ name: '', industry: '', description: '' });
+    const [isSavingCompany, setIsSavingCompany] = useState(false);
+
     useEffect(() => {
         const cfg = getStoredFirebaseConfig();
         setCurrentConfig(cfg);
@@ -42,6 +46,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         if (currentUser?.role === UserRole.ADMIN) {
             loadUsers();
         }
+
+        // Fetch Company Info
+        getCompanyInfo().then(info => {
+            if (info) setCompanyInfo(info);
+        });
+
     }, [currentUser]);
 
     const loadUsers = async () => {
@@ -61,6 +71,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         if(confirm("Sei sicuro di voler eliminare questo utente? Non potrà più accedere, ma lo storico rimarrà visibile.")) {
             await deleteUser(uid);
             setUsers(users.map(u => u.uid === uid ? { ...u, isDeleted: true } : u));
+        }
+    };
+
+    const handleSaveCompanyInfo = async () => {
+        setIsSavingCompany(true);
+        try {
+            await updateCompanyInfo(companyInfo);
+            refreshData(); // Sync global state
+            alert("Informazioni aziendali salvate con successo.");
+        } catch(e) {
+            alert("Errore salvataggio informazioni.");
+        } finally {
+            setIsSavingCompany(false);
         }
     };
 
@@ -201,6 +224,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
             </div>
             
             <div className="space-y-8">
+                {/* COMPANY INFO SECTION */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <Building2 size={20} className="text-indigo-600"/> Informazioni Aziendali
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                        Queste informazioni verranno utilizzate dall'AI per contestualizzare le Job Description, le Valutazioni e l'Onboarding.
+                    </p>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Nome Azienda</label>
+                                <input 
+                                    value={companyInfo.name}
+                                    onChange={e => setCompanyInfo({...companyInfo, name: e.target.value})}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Es. TechCorp Solutions"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Settore</label>
+                                <input 
+                                    value={companyInfo.industry}
+                                    onChange={e => setCompanyInfo({...companyInfo, industry: e.target.value})}
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Es. Software SaaS, FinTech..."
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Descrizione Attività e Valori</label>
+                            <textarea 
+                                value={companyInfo.description}
+                                onChange={e => setCompanyInfo({...companyInfo, description: e.target.value})}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 h-24 resize-none"
+                                placeholder="Descrivi cosa fa l'azienda, la cultura e i valori principali..."
+                            />
+                        </div>
+                        <div className="flex justify-end">
+                            <button 
+                                onClick={handleSaveCompanyInfo}
+                                disabled={isSavingCompany}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isSavingCompany ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>}
+                                Salva Info
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 {/* ADMIN: USER MANAGEMENT */}
                 {currentUser?.role === UserRole.ADMIN && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">

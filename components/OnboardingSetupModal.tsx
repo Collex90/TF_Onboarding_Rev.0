@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { OnboardingTask, OnboardingPhase, OnboardingPhaseLabels, Candidate, JobPosition, OnboardingTemplate, User } from '../types';
+import { OnboardingTask, OnboardingPhase, OnboardingPhaseLabels, Candidate, JobPosition, OnboardingTemplate, User, CompanyInfo } from '../types';
 import { generateOnboardingChecklist } from '../services/ai';
-import { saveOnboardingTemplate, getOnboardingTemplates, deleteOnboardingTemplate, generateId, createOnboardingProcess, getAllUsers } from '../services/storage';
+import { saveOnboardingTemplate, getOnboardingTemplates, deleteOnboardingTemplate, generateId, createOnboardingProcess, getAllUsers, getCompanyInfo } from '../services/storage';
 import { X, Sparkles, Loader2, Save, Download, Trash2, Plus, GripVertical, CheckCircle, Calendar, User as UserIcon } from 'lucide-react';
 
 interface OnboardingSetupModalProps {
@@ -17,6 +17,7 @@ export const OnboardingSetupModal: React.FC<OnboardingSetupModalProps> = ({ isOp
     const [tasks, setTasks] = useState<OnboardingTask[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [allUsers, setAllUsers] = useState<User[]>([]);
+    const [companyInfo, setCompanyInfo] = useState<CompanyInfo | undefined>(undefined);
     
     // Custom Phase Labels
     const [phaseConfig, setPhaseConfig] = useState<Record<string, string>>(OnboardingPhaseLabels);
@@ -33,6 +34,7 @@ export const OnboardingSetupModal: React.FC<OnboardingSetupModalProps> = ({ isOp
             setPhaseConfig(OnboardingPhaseLabels); // Reset to default
             loadTemplates();
             getAllUsers().then(users => setAllUsers(users.filter(u => !u.isDeleted)));
+            getCompanyInfo().then(setCompanyInfo);
         }
     }, [isOpen]);
 
@@ -44,7 +46,7 @@ export const OnboardingSetupModal: React.FC<OnboardingSetupModalProps> = ({ isOp
     const handleGenerateAI = async () => {
         setIsGenerating(true);
         try {
-            const result = await generateOnboardingChecklist(job.title);
+            const result = await generateOnboardingChecklist(job.title, companyInfo);
             const newTasks: OnboardingTask[] = result.items.map(i => ({
                 id: generateId(),
                 description: i.task,

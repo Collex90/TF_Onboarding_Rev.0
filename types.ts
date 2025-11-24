@@ -194,11 +194,18 @@ export interface OnboardingTemplate {
     createdAt: number;
 }
 
+export interface CompanyInfo {
+    name: string;
+    industry: string;
+    description: string;
+}
+
 export interface AppState {
   candidates: Candidate[];
   jobs: JobPosition[];
   applications: Application[];
   onboarding: OnboardingProcess[];
+  companyInfo?: CompanyInfo;
 }
 
 export interface UploadQueueItem {

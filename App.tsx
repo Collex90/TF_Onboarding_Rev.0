@@ -289,7 +289,7 @@ function App() {
                 if (job) {
                     try {
                          const tempCandidate = { ...parsedData, id: 'temp', skills: parsedData.skills || [], summary: parsedData.summary || '', age: parsedData.age, fullName: parsedData.fullName || 'Candidate' } as Candidate;
-                         aiEvaluation = await evaluateFit(tempCandidate, job);
+                         aiEvaluation = await evaluateFit(tempCandidate, job, data.companyInfo);
                     } catch (e) { console.warn("Failed to calculate AI Fit during upload:", e); }
                 }
             }
@@ -305,6 +305,8 @@ function App() {
             } else {
                 await saveCandidateAndApp(fullCandidateData, nextItem.jobId, aiEvaluation);
                 setUploadQueue(prev => prev.map(i => i.id === nextItem.id ? { ...i, status: 'SUCCESS' } : i));
+                // FORCE DATA REFRESH HERE TO SHOW NEW CANDIDATE IMMEDIATELY
+                setRefreshTrigger(prev => prev + 1);
             }
 
           } catch (error: any) {
@@ -362,12 +364,13 @@ function App() {
                if (job) {
                     try {
                         const tempCandidate = { ...item.parsedData, skills: item.parsedData.skills || [] } as Candidate;
-                        aiEvaluation = await evaluateFit(tempCandidate, job);
+                        aiEvaluation = await evaluateFit(tempCandidate, job, data.companyInfo);
                     } catch(e){}
                }
            }
           await saveCandidateAndApp(item.parsedData, item.jobId, aiEvaluation);
           setUploadQueue(prev => prev.map(i => i.id === itemId ? { ...i, status: 'SUCCESS' } : i));
+          setRefreshTrigger(prev => prev + 1); // Force refresh also on Force Save
       } catch(e) { console.error(e); } finally { setIsProcessingQueue(false); }
   };
 
