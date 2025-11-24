@@ -216,9 +216,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
                                         <tr key={u.uid || u.email}>
                                             <td className="p-3 font-medium flex items-center gap-2">
                                                 <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-indigo-600 font-bold text-xs border border-gray-200">
-                                                    {u.avatar ? <img src={u.avatar} className="w-full h-full rounded-full"/> : u.name.charAt(0)}
+                                                    {u.avatar ? <img src={u.avatar} className="w-full h-full rounded-full"/> : (u.name || 'U').charAt(0)}
                                                 </div>
-                                                {u.name}
+                                                {u.name || 'Utente Sconosciuto'}
                                                 {u.uid === currentUser.uid && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">TU</span>}
                                             </td>
                                             <td className="p-3 text-gray-600">{u.email}</td>
