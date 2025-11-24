@@ -1,9 +1,7 @@
 
-import * as firebaseApp from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
-
-const { initializeApp, getApps, getApp } = firebaseApp as any;
 
 const CONFIG_KEY = 'talentflow_firebase_config';
 
@@ -26,6 +24,29 @@ export const getStoredFirebaseConfig = (): FirebaseConfig | null => {
   }
 };
 
+// Funzione per leggere le variabili d'ambiente (Vercel/Vite)
+const getEnvFirebaseConfig = (): FirebaseConfig | null => {
+  try {
+    // @ts-ignore
+    const env = import.meta.env;
+    
+    // Safety check to ensure env exists before accessing properties
+    if (env && env.VITE_FIREBASE_API_KEY) {
+      return {
+        apiKey: env.VITE_FIREBASE_API_KEY,
+        authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: env.VITE_FIREBASE_APP_ID
+      };
+    }
+  } catch (e) {
+    console.warn("Error reading environment variables", e);
+  }
+  return null;
+};
+
 export const saveFirebaseConfig = (config: FirebaseConfig) => {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
   // Re-initialize immediately
@@ -37,13 +58,20 @@ export const removeFirebaseConfig = () => {
   // Reset instances
   db = null;
   auth = null;
+  // Se ci sono variabili d'ambiente, reinizializzerà quelle al reload, 
+  // ma rimuovendo dal localstorage puliamo l'override manuale.
 };
 
 let db: Firestore | null = null;
 let auth: Auth | null = null;
 
 export const initFirebase = () => {
-  const config = getStoredFirebaseConfig();
+  // Priorità: 1. Configurazione Manuale (LocalStorage) -> 2. Variabili d'Ambiente (Vercel)
+  const manualConfig = getStoredFirebaseConfig();
+  const envConfig = getEnvFirebaseConfig();
+  
+  const config = manualConfig || envConfig;
+
   if (config && config.apiKey) {
     try {
       const app = !getApps().length ? initializeApp(config) : getApp();

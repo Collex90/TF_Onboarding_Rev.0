@@ -11,6 +11,95 @@ interface RecruitmentViewProps {
     onUpload: (files: File[], jobId?: string) => void;
 }
 
+interface KanbanColumnProps {
+    status: SelectionStatus;
+    title: string;
+    apps: Application[];
+    candidates: Candidate[];
+    onDrop: (e: React.DragEvent, status: SelectionStatus) => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDragStart: (e: React.DragEvent, appId: string) => void;
+}
+
+const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, title, apps, candidates, onDrop, onDragOver, onDragStart }) => {
+    // Estrazione sicura del colore principale dallo stile dello stato
+    const statusColorClass = StatusColors[status];
+    // Prendiamo il colore del testo (es. text-blue-700) e lo trasformiamo in background (bg-blue-700) per il pallino
+    const dotColor = statusColorClass.match(/text-(\w+)-(\d+)/) 
+        ? `bg-${statusColorClass.match(/text-(\w+)-(\d+)/)![1]}-${statusColorClass.match(/text-(\w+)-(\d+)/)![2]}`
+        : 'bg-gray-500';
+
+    return (
+        <div 
+            className="flex-1 min-w-[280px] bg-gray-50 rounded-xl flex flex-col max-h-full border border-gray-200"
+            onDrop={(e) => onDrop(e, status)}
+            onDragOver={onDragOver}
+        >
+            <div className={`p-3 border-b border-gray-200 font-bold text-sm flex justify-between items-center rounded-t-xl ${StatusColors[status]} bg-opacity-20`}>
+                <span className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${dotColor}`}></span>
+                    {title}
+                </span>
+                <span className="bg-white px-2 py-0.5 rounded-full text-xs border border-gray-200 text-gray-500">{apps.length}</span>
+            </div>
+            <div className="p-3 space-y-3 flex-1 overflow-y-auto custom-scrollbar">
+                {apps.map(app => {
+                    const candidate = candidates.find(c => c.id === app.candidateId);
+                    if (!candidate) return null;
+                    return (
+                        <div 
+                            key={app.id} 
+                            draggable 
+                            onDragStart={(e) => onDragStart(e, app.id)}
+                            className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition-all group"
+                        >
+                            <div className="flex items-start gap-3 mb-2">
+                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold border border-gray-200 overflow-hidden shrink-0">
+                                    {candidate.photo ? <img src={`data:image/jpeg;base64,${candidate.photo}`} className="w-full h-full object-cover"/> : candidate.fullName.charAt(0)}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="font-bold text-sm text-gray-900 truncate">{candidate.fullName}</p>
+                                    <p className="text-xs text-gray-500 truncate">{candidate.currentRole || 'N/A'}</p>
+                                </div>
+                            </div>
+                            {app.aiScore && (
+                                <div className="flex items-center gap-1 mb-2">
+                                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${app.aiScore}%` }}></div>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-indigo-600">{app.aiScore}% Fit</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-50">
+                                <span className="text-[10px] text-gray-400">{new Date(app.updatedAt).toLocaleDateString()}</span>
+                                <button className="text-gray-300 hover:text-indigo-600"><MoreHorizontal size={14}/></button>
+                            </div>
+                        </div>
+                    );
+                })}
+                {apps.length === 0 && (
+                    <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg text-xs">
+                        Trascina qui
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// Extracted for performance and to fix syntax issues
+const SortHeader = ({ label, sortKey, sortConfig, onSort }: { label: string, sortKey: string, sortConfig: { key: string, direction: 'asc' | 'desc' } | null, onSort: (key: string) => void }) => (
+    <th className="p-4 font-semibold cursor-pointer hover:bg-gray-100 transition-colors group select-none text-left" onClick={() => onSort(sortKey)}>
+        <div className="flex items-center gap-1">
+            {label}
+            <div className="flex flex-col">
+                <ChevronUp size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-gray-300'} />
+                <ChevronDown size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-gray-300'} />
+            </div>
+        </div>
+    </th>
+);
+
 export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshData, currentUser, onUpload }) => {
     // State
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -136,80 +225,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         e.preventDefault();
     };
 
-    // Components
-    const SortHeader = ({ label, sortKey }: { label: string, sortKey: string }) => (
-        <th className="p-4 font-semibold cursor-pointer hover:bg-gray-100 transition-colors group select-none text-left" onClick={() => handleSort(sortKey)}>
-            <div className="flex items-center gap-1">
-                {label}
-                <div className="flex flex-col">
-                    <ChevronUp size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-gray-300'} />
-                    <ChevronDown size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-gray-300'} />
-                </div>
-            </div>
-        </th>
-    );
-
-    const KanbanColumn = ({ status, title }: { status: SelectionStatus, title: string }) => {
-        const apps = applicationsForJob.filter(a => a.status === status);
-        
-        return (
-            <div 
-                className="flex-1 min-w-[280px] bg-gray-50 rounded-xl flex flex-col max-h-full border border-gray-200"
-                onDrop={(e) => handleDrop(e, status)}
-                onDragOver={handleDragOver}
-            >
-                <div className={`p-3 border-b border-gray-200 font-bold text-sm flex justify-between items-center rounded-t-xl ${StatusColors[status]} bg-opacity-20`}>
-                    <span className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${StatusColors[status].replace('bg-', 'bg-text-').split(' ')[0].replace('text-', 'bg-')}`}></span>
-                        {title}
-                    </span>
-                    <span className="bg-white px-2 py-0.5 rounded-full text-xs border border-gray-200 text-gray-500">{apps.length}</span>
-                </div>
-                <div className="p-3 space-y-3 flex-1 overflow-y-auto custom-scrollbar">
-                    {apps.map(app => {
-                        const candidate = data.candidates.find(c => c.id === app.candidateId);
-                        if (!candidate) return null;
-                        return (
-                            <div 
-                                key={app.id} 
-                                draggable 
-                                onDragStart={(e) => handleDragStart(e, app.id)}
-                                className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition-all group"
-                            >
-                                <div className="flex items-start gap-3 mb-2">
-                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold border border-gray-200 overflow-hidden shrink-0">
-                                        {candidate.photo ? <img src={`data:image/jpeg;base64,${candidate.photo}`} className="w-full h-full object-cover"/> : candidate.fullName.charAt(0)}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="font-bold text-sm text-gray-900 truncate">{candidate.fullName}</p>
-                                        <p className="text-xs text-gray-500 truncate">{candidate.currentRole || 'N/A'}</p>
-                                    </div>
-                                </div>
-                                {app.aiScore && (
-                                    <div className="flex items-center gap-1 mb-2">
-                                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${app.aiScore}%` }}></div>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-indigo-600">{app.aiScore}% Fit</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-50">
-                                    <span className="text-[10px] text-gray-400">{new Date(app.updatedAt).toLocaleDateString()}</span>
-                                    <button className="text-gray-300 hover:text-indigo-600"><MoreHorizontal size={14}/></button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                    {apps.length === 0 && (
-                        <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg text-xs">
-                            Trascina qui
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
     // Render Content
     if (selectedJob) {
         return (
@@ -249,7 +264,16 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 bg-white">
                    <div className="flex gap-4 h-full min-w-max">
                         {Object.values(SelectionStatus).map(status => (
-                            <KanbanColumn key={status} status={status} title={StatusLabels[status]} />
+                            <KanbanColumn 
+                                key={status} 
+                                status={status} 
+                                title={StatusLabels[status]}
+                                apps={applicationsForJob.filter(a => a.status === status)}
+                                candidates={data.candidates}
+                                onDrop={handleDrop}
+                                onDragOver={handleDragOver}
+                                onDragStart={handleDragStart}
+                            />
                         ))}
                    </div>
                 </div>
@@ -304,28 +328,36 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredJobs.map(job => {
-                    const appCount = data.applications.filter(a => a.jobId === job.id).length;
-                    return (
-                        <div key={job.id} onClick={() => setSelectedJobId(job.id)} className="bg-white rounded-xl border border-gray-200 p-6 cursor-pointer hover:shadow-lg hover:border-indigo-200 transition-all group">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="w-12 h-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                                    <Briefcase size={24}/>
+            {filteredJobs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 bg-white border border-dashed border-gray-300 rounded-xl">
+                    <Briefcase className="text-gray-300 mb-4" size={48} />
+                    <p className="text-gray-500 font-medium">Nessuna posizione trovata.</p>
+                    <p className="text-sm text-gray-400">Crea una nuova posizione o modifica i filtri.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredJobs.map(job => {
+                        const appCount = data.applications.filter(a => a.jobId === job.id).length;
+                        return (
+                            <div key={job.id} onClick={() => setSelectedJobId(job.id)} className="bg-white rounded-xl border border-gray-200 p-6 cursor-pointer hover:shadow-lg hover:border-indigo-200 transition-all group">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="w-12 h-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                        <Briefcase size={24}/>
+                                    </div>
+                                    <span className={`text-[10px] px-2 py-1 rounded font-bold border ${job.status === 'OPEN' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-gray-100 text-gray-600'}`}>{job.status}</span>
                                 </div>
-                                <span className={`text-[10px] px-2 py-1 rounded font-bold border ${job.status === 'OPEN' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-gray-100 text-gray-600'}`}>{job.status}</span>
+                                <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">{job.title}</h3>
+                                <p className="text-sm text-gray-500 mb-4">{job.department}</p>
+                                
+                                <div className="flex items-center justify-between text-sm text-gray-500 pt-4 border-t border-gray-100">
+                                    <span className="flex items-center gap-2"><Users size={16}/> {appCount} Candidati</span>
+                                    <span className="flex items-center gap-1 text-xs">Vedi pipeline <ChevronRight size={14}/></span>
+                                </div>
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">{job.title}</h3>
-                            <p className="text-sm text-gray-500 mb-4">{job.department}</p>
-                            
-                            <div className="flex items-center justify-between text-sm text-gray-500 pt-4 border-t border-gray-100">
-                                <span className="flex items-center gap-2"><Users size={16}/> {appCount} Candidati</span>
-                                <span className="flex items-center gap-1 text-xs">Vedi pipeline <ChevronRight size={14}/></span>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* ADD/EDIT JOB MODAL */}
             {isJobModalOpen && (

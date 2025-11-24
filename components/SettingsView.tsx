@@ -93,6 +93,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
             saveFirebaseConfig(config as FirebaseConfig);
             setCurrentConfig(config);
             setIsCloudConfigOpen(false);
+            // Reload to ensure Firebase is re-initialized globally
+            window.location.reload();
         } catch (e: any) {
             setParseError(e.message || "Errore nel formato.");
         }
@@ -103,6 +105,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
             removeFirebaseConfig();
             setCurrentConfig(null);
             setFirebaseConfigStr('');
+            // Reload to ensure Firebase is disconnected globally
+            window.location.reload();
         }
     };
     

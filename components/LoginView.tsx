@@ -79,7 +79,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, isCloudConfigured
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900">TalentFlow AI</h1>
                     <p className="text-gray-500 text-center mt-2 text-sm">
-                        {isRegistering ? "Crea il tuo account aziendale." : "Piattaforma di Recruiting Intelligente."}
+                        {isRegistering ? "Crea il tuo account aziendale." : "Piattaforma di AI Talent Management."}
                     </p>
                 </div>
 
