@@ -193,6 +193,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     const [isCvPreviewOpen, setIsCvPreviewOpen] = useState(false);
 
     const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false); // New state for save button
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const bulkInputRef = useRef<HTMLInputElement>(null);
@@ -408,22 +409,35 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         e.preventDefault();
         if (!formData.fullName || !formData.email) return;
 
-        const candidateData: Partial<Candidate> = {
-            ...formData,
-            age: formData.age ? Number(formData.age) : undefined,
-            skills: formData.skills || [],
-            benefits: formData.benefits || [],
-            status: formData.status || CandidateStatus.CANDIDATE
-        };
+        setIsSaving(true);
+        setError(null);
 
-        // AWAIT THE ASYNC OPERATIONS TO PREVENT RACE CONDITION
-        if (editingId) {
-            await updateCandidate({ ...candidates.find(c => c.id === editingId)!, ...candidateData as any, updatedAt: Date.now() });
-        } else {
-            await addCandidate({ id: generateId(), ...candidateData as any, createdAt: Date.now(), comments: [] });
+        try {
+            const candidateData: Partial<Candidate> = {
+                ...formData,
+                age: formData.age ? Number(formData.age) : undefined,
+                skills: formData.skills || [],
+                benefits: formData.benefits || [],
+                status: formData.status || CandidateStatus.CANDIDATE
+            };
+
+            // AWAIT THE ASYNC OPERATIONS TO PREVENT RACE CONDITION
+            if (editingId) {
+                const existing = candidates.find(c => c.id === editingId);
+                if(existing) {
+                    await updateCandidate({ ...existing, ...candidateData as any, updatedAt: Date.now() });
+                }
+            } else {
+                await addCandidate({ id: generateId(), ...candidateData as any, createdAt: Date.now(), comments: [] });
+            }
+            refreshData();
+            setIsModalOpen(false);
+        } catch (err: any) {
+            console.error("Save error:", err);
+            setError("Errore durante il salvataggio: " + err.message);
+        } finally {
+            setIsSaving(false);
         }
-        refreshData();
-        setIsModalOpen(false);
     };
 
     const handleAddComment = async () => {
@@ -780,10 +794,23 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                     <div><label className="block text-xs font-bold text-gray-500 mb-1">Benefits (Auto, Buoni Pasto...)</label><input value={formData.benefits?.join(', ')} onChange={e => setFormData({...formData, benefits: e.target.value.split(',').map(s => s.trim()).filter(s => s)})} className="w-full p-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900" /></div>
                                 </div>
                             </div>
+                            
+                            {error && (
+                                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-100">
+                                    <AlertTriangle size={16} className="inline mr-2"/> {error}
+                                </div>
+                            )}
 
                             <div className="flex justify-end gap-3 pt-2">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium">Annulla</button>
-                                <button type="submit" className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Salva</button>
+                                <button type="button" onClick={() => setIsModalOpen(false)} disabled={isSaving} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium disabled:opacity-50">Annulla</button>
+                                <button 
+                                    type="submit" 
+                                    disabled={isSaving}
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center gap-2 disabled:opacity-70"
+                                >
+                                    {isSaving && <Loader2 size={16} className="animate-spin"/>}
+                                    {isSaving ? 'Salvataggio...' : 'Salva'}
+                                </button>
                             </div>
                         </form>
                     </div>

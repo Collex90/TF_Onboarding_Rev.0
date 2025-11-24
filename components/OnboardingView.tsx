@@ -288,7 +288,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                                     {assignee ? (
                                                                         <>
                                                                             <div className="w-6 h-6 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-[10px] font-bold text-indigo-700 overflow-hidden">
-                                                                                {assignee.avatar ? <img src={assignee.avatar} className="w-full h-full object-cover"/> : assignee.name.charAt(0)}
+                                                                                {assignee.avatar ? <img src={assignee.avatar} className="w-full h-full object-cover"/> : (assignee.name || 'U').charAt(0)}
                                                                             </div>
                                                                             <span className="text-xs text-gray-600 max-w-[80px] truncate hidden sm:block">{assignee.name}</span>
                                                                         </>
@@ -313,7 +313,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                                                 className="flex items-center gap-2 p-2 hover:bg-indigo-50 rounded-md cursor-pointer"
                                                                             >
                                                                                 <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] overflow-hidden border">
-                                                                                    {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : u.name.charAt(0)}
+                                                                                    {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : (u.name || 'U').charAt(0)}
                                                                                 </div>
                                                                                 <span className="text-xs text-gray-800 truncate">{u.name}</span>
                                                                                 {task.assigneeId === u.uid && <CheckCircle size={12} className="text-indigo-600 ml-auto"/>}
