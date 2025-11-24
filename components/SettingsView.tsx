@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, CloudUpload } from 'lucide-react';
+import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, UploadCloud } from 'lucide-react';
 import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud } from '../services/storage';
 import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig } from '../services/firebase';
 import { AppState, User, UserRole, BackupMetadata, DeletedItem } from '../types';
@@ -449,7 +449,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
                                         disabled={isBackingUp}
                                         className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-bold shadow-sm disabled:opacity-50"
                                      >
-                                        {isBackingUp ? <Loader2 size={12} className="animate-spin"/> : <CloudUpload size={14}/>} 
+                                        {isBackingUp ? <Loader2 size={12} className="animate-spin"/> : <UploadCloud size={14}/>} 
                                         Crea Backup Ora
                                      </button>
                                      <button 
