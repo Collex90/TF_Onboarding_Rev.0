@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users } from 'lucide-react';
-import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole } from '../services/storage';
+import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, CloudUpload } from 'lucide-react';
+import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud } from '../services/storage';
 import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig } from '../services/firebase';
-import { AppState, User, UserRole } from '../types';
+import { AppState, User, UserRole, BackupMetadata, DeletedItem } from '../types';
 
 interface SettingsViewProps {
     refreshData: () => void;
@@ -24,6 +24,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restoreStatus, setRestoreStatus] = useState<'IDLE' | 'RESTORING' | 'SUCCESS' | 'ERROR'>('IDLE');
 
+    // Cloud Backup State
+    const [cloudBackups, setCloudBackups] = useState<BackupMetadata[]>([]);
+    const [isLoadingBackups, setIsLoadingBackups] = useState(false);
+    const [isBackingUp, setIsBackingUp] = useState(false);
+
+    // Recycle Bin State
+    const [isRecycleBinOpen, setIsRecycleBinOpen] = useState(false);
+    const [deletedItems, setDeletedItems] = useState<DeletedItem[]>([]);
+    const [isLoadingDeleted, setIsLoadingDeleted] = useState(false);
+
     // Demo Data State
     const [isLoadingDemo, setIsLoadingDemo] = useState(false);
 
@@ -36,6 +46,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         setCurrentConfig(cfg);
         if (cfg) {
             setFirebaseConfigStr(JSON.stringify(cfg, null, 2));
+            if (currentUser?.role === UserRole.ADMIN) {
+                loadCloudBackups();
+            }
         }
 
         // Fetch users if Admin
@@ -49,6 +62,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         const userList = await getAllUsers();
         setUsers(userList);
         setIsLoadingUsers(false);
+    };
+
+    const loadCloudBackups = async () => {
+        setIsLoadingBackups(true);
+        const backups = await getCloudBackups();
+        setCloudBackups(backups);
+        setIsLoadingBackups(false);
     };
 
     const handleRoleChange = async (uid: string, newRole: UserRole) => {
@@ -187,6 +207,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         reader.readAsText(file);
     };
 
+    const handleCloudRestore = async (path: string) => {
+        if (!confirm("ATTENZIONE: Il ripristino dal cloud SOVRASCRIVERÀ tutti i dati attuali. Questa operazione è irreversibile. Continuare?")) return;
+        
+        try {
+            setRestoreStatus('RESTORING');
+            await restoreFromCloud(path);
+            setRestoreStatus('SUCCESS');
+            refreshData();
+            setTimeout(() => setRestoreStatus('IDLE'), 3000);
+        } catch (e: any) {
+            console.error(e);
+            alert("Errore ripristino Cloud: " + e.message);
+            setRestoreStatus('ERROR');
+        }
+    };
+
+    const handleManualCloudBackup = async () => {
+        if (!confirm("Creare un nuovo punto di ripristino nel Cloud adesso?")) return;
+        setIsBackingUp(true);
+        try {
+            const data = await getFullDatabase();
+            await uploadBackupToCloud(data);
+            await loadCloudBackups(); // Refresh list
+            alert("Backup Cloud completato con successo!");
+        } catch (e: any) {
+            console.error(e);
+            alert("Errore backup: " + e.message);
+        } finally {
+            setIsBackingUp(false);
+        }
+    };
+
+    const openRecycleBin = async () => {
+        setIsRecycleBinOpen(true);
+        setIsLoadingDeleted(true);
+        const items = await getDeletedItems();
+        setDeletedItems(items);
+        setIsLoadingDeleted(false);
+    };
+
+    const handleRestoreDeleted = async (item: DeletedItem) => {
+        await restoreDeletedItem(item.id, item.type);
+        setDeletedItems(prev => prev.filter(i => i.id !== item.id));
+        refreshData();
+    };
+
     return (
         <div className="p-8 max-w-4xl mx-auto h-full overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
@@ -300,13 +366,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
 
                 {/* BACKUP & RESTORE */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <HardDrive size={20} className="text-gray-600"/> Backup & Ripristino
-                    </h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                            <HardDrive size={20} className="text-gray-600"/> Backup & Ripristino
+                        </h3>
+                        {currentConfig && currentUser?.role === UserRole.ADMIN && (
+                             <button onClick={openRecycleBin} className="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-gray-50 shadow-sm font-medium">
+                                <Trash2 size={14} className="text-red-500"/> Cestino Cloud
+                            </button>
+                        )}
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Export */}
                         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                            <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Download size={16}/> Esporta Dati</h4>
+                            <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Download size={16}/> Esporta Dati Locale</h4>
                             <p className="text-xs text-gray-500 mb-4">Scarica un archivio completo inclusi i CV e le foto.</p>
                             
                             {!backupStats ? (
@@ -337,7 +411,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
                         {/* Import */}
                         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                             <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Upload size={16}/> Ripristina Dati</h4>
-                            <p className="text-xs text-gray-500 mb-4">Carica un backup per ripristinare lo stato.</p>
+                            <p className="text-xs text-gray-500 mb-4">Carica un backup locale per ripristinare lo stato.</p>
                             
                             <input 
                                 type="file" 
@@ -355,11 +429,78 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
                                     <Upload size={16}/> Seleziona File
                                 </button>
                             )}
-                                {restoreStatus === 'RESTORING' && <div className="text-center text-sm text-indigo-600 font-medium">Ripristino in corso...</div>}
-                                {restoreStatus === 'SUCCESS' && <div className="text-center text-sm text-green-600 font-bold">Ripristino completato!</div>}
-                                {restoreStatus === 'ERROR' && <div className="text-center text-sm text-red-600 font-bold">Errore nel file</div>}
+                            {restoreStatus === 'RESTORING' && <div className="text-center text-sm text-indigo-600 font-medium flex items-center justify-center gap-2"><Loader2 className="animate-spin"/> Ripristino in corso...</div>}
+                            {restoreStatus === 'SUCCESS' && <div className="text-center text-sm text-green-600 font-bold">Ripristino completato!</div>}
+                            {restoreStatus === 'ERROR' && <div className="text-center text-sm text-red-600 font-bold">Errore nel file</div>}
                         </div>
                     </div>
+
+                    {/* CLOUD BACKUPS (TIME MACHINE) */}
+                    {currentConfig && currentUser?.role === UserRole.ADMIN && (
+                        <div className="mt-6 border-t border-gray-200 pt-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h4 className="font-bold text-gray-900 flex items-center gap-2"><History size={18} className="text-indigo-600"/> Time Machine (Cloud Backups)</h4>
+                                    <p className="text-xs text-gray-500">Ripristina versioni precedenti salvate automaticamente nel Cloud.</p>
+                                </div>
+                                <div className="flex gap-2">
+                                     <button 
+                                        onClick={handleManualCloudBackup} 
+                                        disabled={isBackingUp}
+                                        className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-bold shadow-sm disabled:opacity-50"
+                                     >
+                                        {isBackingUp ? <Loader2 size={12} className="animate-spin"/> : <CloudUpload size={14}/>} 
+                                        Crea Backup Ora
+                                     </button>
+                                     <button 
+                                        onClick={loadCloudBackups} 
+                                        className="text-gray-600 bg-white border border-gray-300 p-1.5 rounded-lg hover:bg-gray-50"
+                                        title="Aggiorna lista"
+                                     >
+                                        <RefreshCw size={14}/>
+                                     </button>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
+                                {isLoadingBackups ? (
+                                    <div className="p-8 text-center text-gray-400 flex items-center justify-center gap-2"><Loader2 className="animate-spin"/> Caricamento snapshot...</div>
+                                ) : cloudBackups.length === 0 ? (
+                                    <div className="p-8 text-center text-gray-400">Nessun backup cloud trovato.</div>
+                                ) : (
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-gray-100 text-gray-500 text-xs uppercase font-semibold">
+                                            <tr>
+                                                <th className="p-3">Data Creazione</th>
+                                                <th className="p-3">Dimensione</th>
+                                                <th className="p-3 text-right">Azione</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200">
+                                            {cloudBackups.map(bk => (
+                                                <tr key={bk.fullPath} className="hover:bg-white">
+                                                    <td className="p-3 text-gray-700 font-medium">
+                                                        {new Date(bk.timeCreated).toLocaleString()}
+                                                    </td>
+                                                    <td className="p-3 text-gray-500">
+                                                        {(bk.sizeBytes / 1024 / 1024).toFixed(2)} MB
+                                                    </td>
+                                                    <td className="p-3 text-right">
+                                                        <button 
+                                                            onClick={() => handleCloudRestore(bk.fullPath)}
+                                                            className="text-indigo-600 hover:text-indigo-800 text-xs font-bold bg-indigo-50 px-3 py-1.5 rounded border border-indigo-100 flex items-center gap-1 ml-auto"
+                                                        >
+                                                            <RotateCcw size={12}/> Ripristina
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* DEMO DATA */}
@@ -377,6 +518,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
                     </button>
                 </div>
             </div>
+
+            {/* RECYCLE BIN MODAL */}
+            {isRecycleBinOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] backdrop-blur-sm">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh]">
+                        <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
+                            <h3 className="text-lg font-bold flex items-center gap-2"><Trash2 className="text-red-500"/> Cestino</h3>
+                            <button onClick={() => setIsRecycleBinOpen(false)}><span className="sr-only">Chiudi</span>&times;</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar">
+                            {isLoadingDeleted ? <div className="text-center p-8"><Loader2 className="animate-spin mx-auto"/></div> : 
+                             deletedItems.length === 0 ? <p className="text-center text-gray-400 p-8">Il cestino è vuoto.</p> : (
+                                <div className="space-y-2">
+                                    {deletedItems.map(item => (
+                                        <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                            <div>
+                                                <div className="font-bold text-gray-800">{item.name}</div>
+                                                <div className="text-xs text-gray-500 uppercase">{item.type === 'candidate' ? 'Candidato' : 'Applicazione'}</div>
+                                            </div>
+                                            <button onClick={() => handleRestoreDeleted(item)} className="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded font-bold hover:bg-green-200 flex items-center gap-1">
+                                                <RotateCcw size={12}/> Ripristina
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                             )}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
+                            <button onClick={() => setIsRecycleBinOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Chiudi</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

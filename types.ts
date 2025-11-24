@@ -259,3 +259,19 @@ export interface EmailTemplate {
     subject: string;
     body: string;
 }
+
+// --- BACKUP & SYSTEM TYPES ---
+export interface BackupMetadata {
+    name: string;
+    fullPath: string;
+    sizeBytes: number;
+    timeCreated: string;
+    generation: string;
+}
+
+export interface DeletedItem {
+    id: string;
+    type: 'candidate' | 'application'; // Add other types if needed
+    name: string; // Display name
+    deletedAt?: number; // Not strictly tracked in schema yet, but good for future
+}

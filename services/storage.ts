@@ -1,5 +1,6 @@
 
-import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus } from '../types';
+
+import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus, BackupMetadata, DeletedItem } from '../types';
 import { db, auth, storage } from './firebase';
 import { 
   collection, 
@@ -17,7 +18,7 @@ import {
   deleteDoc,
   arrayRemove
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata, uploadString } from 'firebase/storage';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
 import { getStoredFirebaseConfig } from './firebase';
@@ -401,6 +402,137 @@ export const restoreDatabase = async (backupData: AppState) => {
         window.dispatchEvent(new Event('talentflow-local-update'));
     }
 };
+
+// --- CLOUD BACKUP (SYSTEM) ---
+
+export const uploadBackupToCloud = async (state: AppState): Promise<void> => {
+    if (!db || !storage) throw new Error("Cloud non attivo");
+    const jsonString = JSON.stringify(state);
+    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const timeStr = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `backup_${timeStr}.json`;
+    
+    // Upload to Storage
+    const storageRef = ref(storage, `system_backups/${filename}`);
+    await uploadString(storageRef, jsonString);
+    
+    // Update Log in Firestore (to prevent multiple daily backups)
+    await setDoc(doc(db, 'settings', 'backup_log'), {
+        lastBackupDate: dateStr,
+        lastBackupFile: filename,
+        updatedAt: Date.now()
+    }, { merge: true });
+};
+
+export const checkAndTriggerAutoBackup = async () => {
+    if (!db || !storage) return; // No cloud
+    
+    try {
+        const logRef = doc(db, 'settings', 'backup_log');
+        const logSnap = await getDoc(logRef);
+        const today = new Date().toISOString().split('T')[0];
+        
+        if (logSnap.exists()) {
+            const lastDate = logSnap.data().lastBackupDate;
+            if (lastDate === today) {
+                console.log("Backup already done today.");
+                return; // Already backed up today
+            }
+        }
+        
+        console.log("Triggering Auto-Backup...");
+        const fullData = await getFullDatabase();
+        await uploadBackupToCloud(fullData);
+        console.log("Auto-Backup Completed.");
+        
+    } catch (e) {
+        console.error("Auto-Backup Failed:", e);
+    }
+};
+
+export const getCloudBackups = async (): Promise<BackupMetadata[]> => {
+    if (!storage) return [];
+    const listRef = ref(storage, 'system_backups');
+    try {
+        const res = await listAll(listRef);
+        const metaPromises = res.items.map(itemRef => getMetadata(itemRef));
+        const metas = await Promise.all(metaPromises);
+        
+        return metas.map(m => ({
+            name: m.name,
+            fullPath: m.fullPath,
+            sizeBytes: m.size,
+            timeCreated: m.timeCreated,
+            generation: m.generation
+        })).sort((a, b) => new Date(b.timeCreated).getTime() - new Date(a.timeCreated).getTime());
+    } catch (e) {
+        console.error("Error listing backups:", e);
+        return [];
+    }
+};
+
+export const restoreFromCloud = async (fullPath: string) => {
+    if (!storage) throw new Error("Storage not active");
+    const storageRef = ref(storage, fullPath);
+    const url = await getDownloadURL(storageRef);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to download backup file");
+    const jsonData = await response.json();
+    await restoreDatabase(jsonData);
+};
+
+// --- RECYCLE BIN (SOFT DELETE MANAGE) ---
+export const getDeletedItems = async (): Promise<DeletedItem[]> => {
+    if (!db) return [];
+    
+    const results: DeletedItem[] = [];
+    
+    // Candidates
+    const cQ = query(collection(db, 'candidates'), where('isDeleted', '==', true));
+    const cSnap = await getDocs(cQ);
+    cSnap.forEach(d => {
+        const data = d.data();
+        results.push({ id: d.id, type: 'candidate', name: data.fullName || 'Unknown' });
+    });
+
+    // Applications
+    const aQ = query(collection(db, 'applications'), where('isDeleted', '==', true));
+    const aSnap = await getDocs(aQ);
+    // Fetch job titles for context would be nice, but keep simple for now
+    aSnap.forEach(d => {
+         // App doesn't have a name, so we use ID or fetch related candidate.
+         // For Recycle Bin V1, let's stick to restoring Candidates as they are the main entity.
+         // If we restore a candidate, we should restore their apps.
+         // Standalone deleted apps are rare in this logic (cascading delete).
+    });
+
+    return results;
+};
+
+export const restoreDeletedItem = async (id: string, type: 'candidate' | 'application') => {
+    if (!db) return;
+    
+    const batch = writeBatch(db);
+    
+    if (type === 'candidate') {
+        const ref = doc(db, 'candidates', id);
+        batch.update(ref, { isDeleted: false });
+        
+        // Also restore applications for this candidate? 
+        // Logic: when deleting candidate we soft-deleted apps. So we should probably restore them.
+        const appsQ = query(collection(db, 'applications'), where('candidateId', '==', id), where('isDeleted', '==', true));
+        const appsSnap = await getDocs(appsQ);
+        appsSnap.forEach(doc => {
+            batch.update(doc.ref, { isDeleted: false });
+        });
+    } else {
+         const ref = doc(db, 'applications', id);
+         batch.update(ref, { isDeleted: false });
+    }
+    
+    await batch.commit();
+};
+
 
 // --- ACTIONS ---
 

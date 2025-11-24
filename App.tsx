@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { CandidateView } from './components/CandidateView';
@@ -7,7 +8,7 @@ import { SettingsView } from './components/SettingsView';
 import { DashboardView } from './components/DashboardView';
 import { LoginView } from './components/LoginView';
 import { OnboardingView } from './components/OnboardingView';
-import { subscribeToData, generateId, addCandidate, createApplication, syncUserProfile, seedDatabase } from './services/storage';
+import { subscribeToData, generateId, addCandidate, createApplication, syncUserProfile, seedDatabase, checkAndTriggerAutoBackup } from './services/storage';
 import { AppState, User, UploadQueueItem, Candidate, SelectionStatus, CandidateStatus, UserRole } from './types';
 import { auth, db, initFirebase } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -166,6 +167,12 @@ function App() {
                 // Sync with Firestore to get real role
                 const syncedUser = await syncUserProfile(basicUser);
                 setUser(syncedUser);
+
+                // --- SMART BACKUP TRIGGER ---
+                if (syncedUser.role === UserRole.ADMIN) {
+                    checkAndTriggerAutoBackup(); // Run in background
+                }
+
             } else {
                 setUser(null);
             }
