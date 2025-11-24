@@ -159,11 +159,16 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                 >
                                     <div className="flex items-center gap-3 mb-2">
                                         <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200">
-                                            {c?.photo ? <img src={`data:image/jpeg;base64,${c.photo}`} className="w-full h-full object-cover"/> : c?.fullName.charAt(0)}
+                                            {c?.photo ? (
+                                                <img src={`data:image/jpeg;base64,${c.photo}`} className="w-full h-full object-cover"/>
+                                            ) : (
+                                                // SAFE CHARAT ACCESS
+                                                c?.fullName ? c.fullName.charAt(0) : '?'
+                                            )}
                                         </div>
                                         <div className="min-w-0">
-                                            <h4 className="font-bold text-gray-900 text-sm truncate">{c?.fullName}</h4>
-                                            <p className="text-xs text-gray-500 truncate">{j?.title}</p>
+                                            <h4 className="font-bold text-gray-900 text-sm truncate">{c?.fullName || 'Candidato Sconosciuto'}</h4>
+                                            <p className="text-xs text-gray-500 truncate">{j?.title || 'Posizione Sconosciuta'}</p>
                                         </div>
                                     </div>
                                     <div className="space-y-1">
@@ -189,8 +194,14 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                         {/* HEADER */}
                         <div className="p-6 bg-white border-b border-gray-200 flex justify-between items-start shadow-sm z-10">
                             <div className="flex items-center gap-4">
-                                <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden border-2 border-white shadow-md">
-                                    {selectedCandidate.photo ? <img src={`data:image/jpeg;base64,${selectedCandidate.photo}`} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center font-bold text-2xl text-gray-400">{selectedCandidate.fullName.charAt(0)}</div>}
+                                <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden border-2 border-white shadow-md flex items-center justify-center">
+                                    {selectedCandidate.photo ? (
+                                        <img src={`data:image/jpeg;base64,${selectedCandidate.photo}`} className="w-full h-full object-cover"/>
+                                    ) : (
+                                        <span className="font-bold text-2xl text-gray-400">
+                                            {selectedCandidate.fullName ? selectedCandidate.fullName.charAt(0) : '?'}
+                                        </span>
+                                    )}
                                 </div>
                                 <div>
                                     <h1 className="text-2xl font-bold text-gray-900">{selectedCandidate.fullName}</h1>

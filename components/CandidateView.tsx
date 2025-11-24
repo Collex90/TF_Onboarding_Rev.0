@@ -404,7 +404,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         } catch (err: any) { setError('Errore lettura file.'); setIsLoading(false); }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.fullName || !formData.email) return;
 
@@ -416,10 +416,11 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             status: formData.status || CandidateStatus.CANDIDATE
         };
 
+        // AWAIT THE ASYNC OPERATIONS TO PREVENT RACE CONDITION
         if (editingId) {
-            updateCandidate({ ...candidates.find(c => c.id === editingId)!, ...candidateData as any, updatedAt: Date.now() });
+            await updateCandidate({ ...candidates.find(c => c.id === editingId)!, ...candidateData as any, updatedAt: Date.now() });
         } else {
-            addCandidate({ id: generateId(), ...candidateData as any, createdAt: Date.now(), comments: [] });
+            await addCandidate({ id: generateId(), ...candidateData as any, createdAt: Date.now(), comments: [] });
         }
         refreshData();
         setIsModalOpen(false);
