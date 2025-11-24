@@ -1,5 +1,6 @@
 
 
+
 import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus, BackupMetadata, DeletedItem } from '../types';
 import { db, auth, storage } from './firebase';
 import { 
@@ -313,6 +314,7 @@ export const subscribeToData = (user: User | null, callback: (data: AppState) =>
       return {
           ...d,
           candidates: (d.candidates || []).filter(c => !c.isDeleted),
+          jobs: (d.jobs || []).filter(j => !j.isDeleted),
           applications: (d.applications || []).filter(a => !a.isDeleted)
       };
   };
@@ -339,7 +341,7 @@ const refreshFullStateFromFirebase = async (user: User | null, callback: (data: 
 
         cachedState = {
             candidates: cSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Candidate)).filter(c => !c.isDeleted),
-            jobs: jSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as JobPosition)),
+            jobs: jSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as JobPosition)).filter(j => !j.isDeleted),
             applications: aSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Application)).filter(a => !a.isDeleted),
             onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess)),
             companyInfo: companySnap.exists() ? companySnap.data() as CompanyInfo : undefined
@@ -502,21 +504,28 @@ export const getDeletedItems = async (): Promise<DeletedItem[]> => {
         results.push({ id: d.id, type: 'candidate', name: data.fullName || 'Unknown' });
     });
 
+    // Jobs
+    const jQ = query(collection(db, 'jobs'), where('isDeleted', '==', true));
+    const jSnap = await getDocs(jQ);
+    jSnap.forEach(d => {
+        const data = d.data();
+        results.push({ id: d.id, type: 'job', name: data.title || 'Unknown Position' });
+    });
+
     // Applications
     const aQ = query(collection(db, 'applications'), where('isDeleted', '==', true));
     const aSnap = await getDocs(aQ);
     // Fetch job titles for context would be nice, but keep simple for now
     aSnap.forEach(d => {
          // App doesn't have a name, so we use ID or fetch related candidate.
-         // For Recycle Bin V1, let's stick to restoring Candidates as they are the main entity.
-         // If we restore a candidate, we should restore their apps.
+         // For Recycle Bin V1, let's stick to restoring Candidates/Jobs.
          // Standalone deleted apps are rare in this logic (cascading delete).
     });
 
     return results;
 };
 
-export const restoreDeletedItem = async (id: string, type: 'candidate' | 'application') => {
+export const restoreDeletedItem = async (id: string, type: 'candidate' | 'application' | 'job') => {
     if (!db) return;
     
     const batch = writeBatch(db);
@@ -526,12 +535,14 @@ export const restoreDeletedItem = async (id: string, type: 'candidate' | 'applic
         batch.update(ref, { isDeleted: false });
         
         // Also restore applications for this candidate? 
-        // Logic: when deleting candidate we soft-deleted apps. So we should probably restore them.
         const appsQ = query(collection(db, 'applications'), where('candidateId', '==', id), where('isDeleted', '==', true));
         const appsSnap = await getDocs(appsQ);
         appsSnap.forEach(doc => {
             batch.update(doc.ref, { isDeleted: false });
         });
+    } else if (type === 'job') {
+         const ref = doc(db, 'jobs', id);
+         batch.update(ref, { isDeleted: false });
     } else {
          const ref = doc(db, 'applications', id);
          batch.update(ref, { isDeleted: false });
@@ -732,10 +743,11 @@ export const updateJob = async (job: JobPosition) => {
 
 export const deleteJob = async (jobId: string) => {
     if (db) {
-        await deleteDoc(doc(db, 'jobs', jobId));
+        await updateDoc(doc(db, 'jobs', jobId), { isDeleted: true });
     } else {
         const data = getLocalData();
-        data.jobs = data.jobs.filter(j => j.id !== jobId);
+        const job = data.jobs.find(j => j.id === jobId);
+        if(job) job.isDeleted = true;
         saveLocalData(data);
         window.dispatchEvent(new Event('talentflow-local-update'));
     }

@@ -1,8 +1,11 @@
 
+
+
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
 import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image } from 'lucide-react';
-import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, addCandidateAttachment, deleteCandidateAttachment } from '../services/storage';
+import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, addCandidateAttachment, deleteCandidateAttachment, deleteJob } from '../services/storage';
 import { evaluateFit, generateJobDetails, generateScorecardSchema } from '../services/ai';
 
 interface RecruitmentViewProps {
@@ -133,6 +136,10 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const [newComment, setNewComment] = useState('');
     const [isPhotoZoomed, setIsPhotoZoomed] = useState(false);
     const [isCvPreviewOpen, setIsCvPreviewOpen] = useState(false);
+
+    // DELETE JOB STATES
+    const [jobToDeleteId, setJobToDeleteId] = useState<string | null>(null);
+    const [isDeletingJob, setIsDeletingJob] = useState(false);
     
     // EMAIL STATE
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -208,6 +215,30 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         });
         setAssignedTeamMembers(job.assignedTeamMembers || []);
         setIsJobModalOpen(true);
+    };
+
+    // NEW: Trigger Modal
+    const promptDeleteJob = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setJobToDeleteId(id);
+    };
+
+    // NEW: Action
+    const confirmDeleteJob = async () => {
+        if (!jobToDeleteId) return;
+        setIsDeletingJob(true);
+        try {
+            await deleteJob(jobToDeleteId);
+            if (selectedJobId === jobToDeleteId) setSelectedJobId(null);
+            refreshData();
+            setJobToDeleteId(null);
+        } catch (e) {
+            console.error(e);
+            alert("Errore durante l'eliminazione");
+        } finally {
+            setIsDeletingJob(false);
+        }
     };
 
     // Scorecard Edit Handlers (Job Modal)
@@ -548,7 +579,17 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 {currentUser?.role === UserRole.TEAM && isAssigned && (<div className="absolute top-6 right-6 text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full font-bold flex items-center gap-1 border border-indigo-100"><Shield size={10}/> ASSEGNATO</div>)}
                                 <div className="flex justify-between items-start mb-2 pr-20"><h3 className="text-xl font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{job.title}</h3><span className={`text-xs px-2 py-1 rounded-full font-medium ${job.status === 'OPEN' ? 'bg-green-100 text-green-800' : job.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'}`}>{job.status}</span></div>
                                 <p className="text-gray-500 text-sm mb-4">{job.department}</p>
-                                <div className="mt-auto flex justify-between items-center text-sm pt-4 border-t border-gray-50"><div className="flex gap-4 text-xs"><span className="font-bold text-gray-700">{activeCount} <span className="text-gray-400 font-normal">Attivi</span></span><span className="font-bold text-green-700">{hiredCount} <span className="text-gray-400 font-normal">Assunti</span></span><span className="font-bold text-red-700">{rejectedCount} <span className="text-gray-400 font-normal">Scartati</span></span></div><div className="flex gap-2">{(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (<button onClick={(e) => { e.stopPropagation(); openEditJobModal(job); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16}/></button>)}<span className="flex items-center gap-1 text-indigo-600 font-medium">Gestisci <ChevronRight size={16} /></span></div></div>
+                                <div className="mt-auto flex justify-between items-center text-sm pt-4 border-t border-gray-50"><div className="flex gap-4 text-xs"><span className="font-bold text-gray-700">{activeCount} <span className="text-gray-400 font-normal">Attivi</span></span><span className="font-bold text-green-700">{hiredCount} <span className="text-gray-400 font-normal">Assunti</span></span><span className="font-bold text-red-700">{rejectedCount} <span className="text-gray-400 font-normal">Scartati</span></span></div>
+                                <div className="flex gap-2">
+                                    {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
+                                        <>
+                                            <button onClick={(e) => { e.stopPropagation(); openEditJobModal(job); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16}/></button>
+                                            <button onClick={(e) => promptDeleteJob(e, job.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-1 z-20 relative"><Trash2 size={16}/></button>
+                                        </>
+                                    )}
+                                    <span className="flex items-center gap-1 text-indigo-600 font-medium ml-2">Gestisci <ChevronRight size={16} /></span>
+                                </div>
+                                </div>
                             </div>
                         );
                     })}
@@ -619,6 +660,28 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     </div>
                 )}
                 {/* ... Template Manager & Editor Modals (assumed present) ... */}
+
+                {/* DELETE JOB CONFIRMATION MODAL */}
+                {jobToDeleteId && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setJobToDeleteId(null)}>
+                        <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-gray-200" onClick={e => e.stopPropagation()}>
+                            <div className="flex flex-col items-center text-center">
+                                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600">
+                                    <Trash2 size={24} />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Elimina Posizione</h3>
+                                <p className="text-sm text-gray-500 mb-6">
+                                    Sei sicuro di voler eliminare questa posizione? Verrà spostata nel cestino.
+                                </p>
+                                <div className="flex gap-3 w-full">
+                                    <button onClick={() => setJobToDeleteId(null)} disabled={isDeletingJob} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50">Annulla</button>
+                                    <button onClick={confirmDeleteJob} disabled={isDeletingJob} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50">{isDeletingJob ? <Loader2 size={16} className="animate-spin"/> : 'Elimina'}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div>
         );
     }

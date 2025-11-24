@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, UploadCloud } from 'lucide-react';
 import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud } from '../services/storage';
@@ -535,7 +537,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
                                         <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                                             <div>
                                                 <div className="font-bold text-gray-800">{item.name}</div>
-                                                <div className="text-xs text-gray-500 uppercase">{item.type === 'candidate' ? 'Candidato' : 'Applicazione'}</div>
+                                                <div className="text-xs text-gray-500 uppercase">
+                                                    {item.type === 'candidate' ? 'Candidato' : item.type === 'job' ? 'Posizione' : 'Applicazione'}
+                                                </div>
                                             </div>
                                             <button onClick={() => handleRestoreDeleted(item)} className="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded font-bold hover:bg-green-200 flex items-center gap-1">
                                                 <RotateCcw size={12}/> Ripristina

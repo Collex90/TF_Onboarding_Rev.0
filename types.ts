@@ -1,4 +1,5 @@
 
+
 export enum SelectionStatus {
   TO_ANALYZE = 'DA_ANALIZZARE',
   SCREENING = 'TELEFONATA_CONOSCITIVA',
@@ -145,6 +146,7 @@ export interface JobPosition {
   status: 'OPEN' | 'CLOSED' | 'SUSPENDED' | 'COMPLETED';
   assignedTeamMembers?: string[]; // Array of User UIDs who can access this job
   scorecardSchema?: ScorecardSchema; // The evaluation template
+  isDeleted?: boolean; // Soft delete flag
   createdAt: number;
 }
 
@@ -271,7 +273,7 @@ export interface BackupMetadata {
 
 export interface DeletedItem {
     id: string;
-    type: 'candidate' | 'application'; // Add other types if needed
+    type: 'candidate' | 'application' | 'job'; // Add other types if needed
     name: string; // Display name
     deletedAt?: number; // Not strictly tracked in schema yet, but good for future
 }
