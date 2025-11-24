@@ -235,6 +235,7 @@ export interface CompanyInfo {
     name: string;
     industry: string;
     description: string;
+    productsServices?: string; // NEW: Detailed products and services for AI context
 }
 
 export interface AppState {

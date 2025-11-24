@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { Candidate, JobPosition, ScorecardSchema, OnboardingPhase, CompanyInfo } from "../types";
 
 // Initialize the client safely handling both Vite and legacy envs
@@ -30,10 +29,10 @@ export interface ParsedCVData extends Partial<Candidate> {
 }
 
 const COMMON_SAFETY_SETTINGS = [
-    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' }
+    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }
 ];
 
 export const parseCV = async (base64Data: string, mimeType: string): Promise<ParsedCVData> => {
@@ -120,7 +119,15 @@ export const generateJobDetails = async (title: string, department: string, comp
 
     let systemInstruction = "Genera Job Description sintetica (max 300 char) e requisiti. IMPORTANTE: Usa SOLO testo semplice e elenchi puntati Markdown (con il trattino -). NON usare MAI tag HTML come <ul> o <li>.";
     if (companyContext && companyContext.name) {
-        systemInstruction = `Sei un HR Manager per l'azienda ${companyContext.name} operante nel settore ${companyContext.industry}. Descrizione azienda: "${companyContext.description}". Genera una Job Description e Requisiti specifici per questa realtà. IMPORTANTE: Usa SOLO testo semplice e elenchi puntati Markdown (con il trattino -). NON usare MAI tag HTML come <ul> o <li>.`;
+        systemInstruction = `Sei un HR Manager per l'azienda ${companyContext.name} operante nel settore ${companyContext.industry}. 
+        
+        CONTESTO AZIENDALE:
+        Descrizione: "${companyContext.description}"
+        Prodotti/Servizi: "${companyContext.productsServices || 'Non specificato'}"
+
+        Genera una Job Description e Requisiti specifici per questa realtà. Il tono deve riflettere la cultura aziendale descritta.
+        I requisiti devono includere competenze pertinenti ai prodotti/servizi dell'azienda se applicabile.
+        IMPORTANTE: Usa SOLO testo semplice e elenchi puntati Markdown (con il trattino -). NON usare MAI tag HTML come <ul> o <li>.`;
     }
 
     try {
@@ -164,7 +171,16 @@ export const generateScorecardSchema = async (title: string, description: string
 
     let systemInstruction = "Crea 3 categorie di valutazione con 3 item ciascuna per interviste.";
     if (companyContext && companyContext.name) {
-        systemInstruction = `Crea una scheda di valutazione per ${companyContext.name} (${companyContext.industry}). Le domande e i criteri devono riflettere i valori aziendali: ${companyContext.description}.`;
+        systemInstruction = `Crea una scheda di valutazione per ${companyContext.name} (${companyContext.industry}). 
+        
+        CONTESTO AZIENDALE:
+        Descrizione: "${companyContext.description}"
+        Prodotti/Servizi: "${companyContext.productsServices || ''}"
+
+        Le domande e i criteri devono:
+        1. Riflettere i valori aziendali descritti.
+        2. Valutare l'attitudine a lavorare nel settore specifico (${companyContext.industry}).
+        3. Se pertinente, valutare la familiarità con la tipologia di prodotti offerti (${companyContext.productsServices}).`;
     }
 
     try {
@@ -228,18 +244,34 @@ export const evaluateFit = async (candidate: Candidate, job: JobPosition, compan
 
     let systemInstruction = "Valuta match candidato/job (0-100). Sii severo ma giusto. Ragionamento max 2 frasi.";
     if (companyContext && companyContext.name) {
-        systemInstruction = `Valuta il candidato per ${companyContext.name} (${companyContext.industry}). Contesto Aziendale: ${companyContext.description}. Oltre alle hard skill, valuta se l'esperienza pregressa del candidato è in settori affini a quello dell'azienda.`;
+        systemInstruction = `Sei un Senior Recruiter per ${companyContext.name}. 
+        
+        CONTESTO AZIENDALE:
+        Settore: ${companyContext.industry}
+        Descrizione: ${companyContext.description}
+        Prodotti/Servizi: ${companyContext.productsServices || 'Non specificato'}
+
+        ISTRUZIONI PER IL CALCOLO DEL MATCH (0-100%):
+        1. HARD SKILLS: Verifica corrispondenza con i requisiti del job.
+        2. INDUSTRY FIT: Se il candidato proviene da aziende concorrenti o dallo stesso settore (${companyContext.industry}), AUMENTA il punteggio.
+        3. PRODUCT FIT: Se il candidato ha esperienza con prodotti/servizi simili a "${companyContext.productsServices}", AUMENTA il punteggio.
+        4. CULTURE FIT: Valuta se l'esperienza pregressa (aziende simili per dimensioni/cultura) è compatibile.
+        
+        Nel reasoning, cita esplicitamente se hai trovato un match di settore o di prodotto.`;
     }
 
     // TOKEN OPTIMIZATION: Truncate large fields
     const prompt = `
-    CAND: ${candidate.fullName}
-    ROLE: ${candidate.currentRole}
-    SKILLS: ${candidate.skills.slice(0, 10).join(', ')}
-    SUMM: ${candidate.summary?.substring(0, 600) || ''}
+    CANDIDATO:
+    Nome: ${candidate.fullName}
+    Ruolo Attuale: ${candidate.currentRole}
+    Azienda Attuale: ${candidate.currentCompany}
+    Skills: ${candidate.skills.slice(0, 10).join(', ')}
+    Summary: ${candidate.summary?.substring(0, 600) || ''}
     
-    JOB: ${job.title}
-    REQS: ${job.requirements?.substring(0, 800) || ''}
+    POSIZIONE:
+    Titolo: ${job.title}
+    Requisiti: ${job.requirements?.substring(0, 800) || ''}
     `;
 
     try {
@@ -284,7 +316,18 @@ export const generateOnboardingChecklist = async (jobTitle: string, companyConte
 
     let systemInstruction = "Crea una lista di 8-12 attività di onboarding divise per dipartimento (HR, IT, TEAM) e fase temporale (PRE_BOARDING, DAY_1, WEEK_1, MONTH_1). Rispondi in JSON.";
     if (companyContext && companyContext.name) {
-        systemInstruction = `Crea un piano di onboarding specifico per ${companyContext.name} (${companyContext.industry}). Considera la descrizione: ${companyContext.description}. Includi task culturali specifici per questa azienda.`;
+        systemInstruction = `Crea un piano di onboarding specifico per ${companyContext.name} (${companyContext.industry}). 
+        
+        CONTESTO AZIENDALE:
+        Descrizione: "${companyContext.description}"
+        Prodotti/Servizi: "${companyContext.productsServices || ''}"
+
+        ISTRUZIONI:
+        1. Includi task per far conoscere al neoassunto i prodotti/servizi chiave (${companyContext.productsServices}).
+        2. Includi momenti di formazione sulla cultura aziendale descritta.
+        3. Adatta il tono (formale/informale) alla descrizione dell'azienda.
+        
+        Genera task pratici e specifici.`;
     }
 
     try {

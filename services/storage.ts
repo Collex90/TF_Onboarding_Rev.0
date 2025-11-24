@@ -1,6 +1,3 @@
-
-
-
 import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus, BackupMetadata, DeletedItem } from '../types';
 import { db, auth, storage } from './firebase';
 import { 
@@ -34,7 +31,7 @@ const defaultState: AppState = {
   jobs: [],
   applications: [],
   onboarding: [],
-  companyInfo: { name: '', industry: '', description: '' }
+  companyInfo: { name: '', industry: '', description: '', productsServices: '' }
 };
 
 // Helper for ID generation

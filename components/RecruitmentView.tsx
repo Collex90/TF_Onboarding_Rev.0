@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
 import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image } from 'lucide-react';
@@ -260,8 +259,25 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         setIsJobModalOpen(false);
     };
 
-    const handleGenerateJobAI = async () => { if (!jobForm.title || !jobForm.department) { alert("Inserisci Titolo e Dipartimento."); return; } setIsGeneratingJob(true); try { const details = await generateJobDetails(jobForm.title, jobForm.department); setJobForm(prev => ({ ...prev, description: details.description, requirements: details.requirements })); } catch (e) { alert("Errore AI: impossibile generare dettagli."); } finally { setIsGeneratingJob(false); } };
-    const handleGenerateScorecardAI = async () => { if (!jobForm.title || !jobForm.description) { alert("Inserisci Titolo e Descrizione prima di generare la scheda."); return; } setIsGeneratingScorecard(true); try { const schema = await generateScorecardSchema(jobForm.title, jobForm.description); setJobForm(prev => ({ ...prev, scorecardSchema: schema })); } catch(e) { alert("Errore AI Scorecard."); } finally { setIsGeneratingScorecard(false); } };
+    const handleGenerateJobAI = async () => { 
+        if (!jobForm.title || !jobForm.department) { alert("Inserisci Titolo e Dipartimento."); return; } 
+        setIsGeneratingJob(true); 
+        try { 
+            // PASS COMPANY CONTEXT
+            const details = await generateJobDetails(jobForm.title, jobForm.department, data.companyInfo); 
+            setJobForm(prev => ({ ...prev, description: details.description, requirements: details.requirements })); 
+        } catch (e) { alert("Errore AI: impossibile generare dettagli."); } finally { setIsGeneratingJob(false); } 
+    };
+
+    const handleGenerateScorecardAI = async () => { 
+        if (!jobForm.title || !jobForm.description) { alert("Inserisci Titolo e Descrizione prima di generare la scheda."); return; } 
+        setIsGeneratingScorecard(true); 
+        try { 
+            // PASS COMPANY CONTEXT
+            const schema = await generateScorecardSchema(jobForm.title, jobForm.description, data.companyInfo); 
+            setJobForm(prev => ({ ...prev, scorecardSchema: schema })); 
+        } catch(e) { alert("Errore AI Scorecard."); } finally { setIsGeneratingScorecard(false); } 
+    };
 
     // --- TEMPLATE MANAGEMENT LOGIC ---
     const handleOpenSaveTemplate = () => { if (!jobForm.scorecardSchema?.categories.length) { alert("La scheda è vuota. Aggiungi categorie prima di salvare."); return; } setTemplateName(''); setIsSaveTemplateModalOpen(true); };
@@ -299,9 +315,50 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
 
     // ... (Standard handlers kept same)
-    const handleBatchAddToPipeline = async () => { if (!selectedJobId || selectedAssociateIds.size === 0) return; setIsAssociating(true); try { const job = data.jobs.find(j => j.id === selectedJobId); if (!job) return; const promises = Array.from(selectedAssociateIds).map(async (candidateId: string) => { const candidate = data.candidates.find(c => c.id === candidateId); let aiScore: number | undefined; let aiReasoning: string | undefined; if (candidate) { try { const fit = await evaluateFit(candidate, job); aiScore = fit.score; aiReasoning = fit.reasoning; } catch (e) { console.error(e); } } const app: Application = { id: generateId(), candidateId, jobId: selectedJobId, status: SelectionStatus.TO_ANALYZE, aiScore, aiReasoning, updatedAt: Date.now() }; return createApplication(app); }); await Promise.all(promises); refreshData(); setIsAssociateModalOpen(false); setSelectedAssociateIds(new Set()); } catch(e) { console.error(e); } finally { setIsAssociating(false); } };
+    const handleBatchAddToPipeline = async () => { 
+        if (!selectedJobId || selectedAssociateIds.size === 0) return; 
+        setIsAssociating(true); 
+        try { 
+            const job = data.jobs.find(j => j.id === selectedJobId); 
+            if (!job) return; 
+            const promises = Array.from(selectedAssociateIds).map(async (candidateId: string) => { 
+                const candidate = data.candidates.find(c => c.id === candidateId); 
+                let aiScore: number | undefined; 
+                let aiReasoning: string | undefined; 
+                if (candidate) { 
+                    try { 
+                        // PASS COMPANY CONTEXT
+                        const fit = await evaluateFit(candidate, job, data.companyInfo); 
+                        aiScore = fit.score; 
+                        aiReasoning = fit.reasoning; 
+                    } catch (e) { console.error(e); } 
+                } 
+                const app: Application = { id: generateId(), candidateId, jobId: selectedJobId, status: SelectionStatus.TO_ANALYZE, aiScore, aiReasoning, updatedAt: Date.now() }; 
+                return createApplication(app); 
+            }); 
+            await Promise.all(promises); 
+            refreshData(); 
+            setIsAssociateModalOpen(false); 
+            setSelectedAssociateIds(new Set()); 
+        } catch(e) { console.error(e); } finally { setIsAssociating(false); } 
+    };
+    
     const toggleCandidateSelection = (candidateId: string) => { const newSet = new Set(selectedAssociateIds); if (newSet.has(candidateId)) { newSet.delete(candidateId); } else { newSet.add(candidateId); } setSelectedAssociateIds(newSet); };
-    const handleEvaluate = async (appId: string, candidateId: string) => { if (!selectedJobId) return; const job = data.jobs.find(j => j.id === selectedJobId); const candidate = data.candidates.find(c => c.id === candidateId); if (!job || !candidate) return; setEvaluatingId(appId); try { const result = await evaluateFit(candidate, job); updateApplicationAiScore(appId, result.score, result.reasoning); refreshData(); } catch (e) { alert("Errore valutazione AI: " + e); } finally { setEvaluatingId(null); } };
+    
+    const handleEvaluate = async (appId: string, candidateId: string) => { 
+        if (!selectedJobId) return; 
+        const job = data.jobs.find(j => j.id === selectedJobId); 
+        const candidate = data.candidates.find(c => c.id === candidateId); 
+        if (!job || !candidate) return; 
+        setEvaluatingId(appId); 
+        try { 
+            // PASS COMPANY CONTEXT
+            const result = await evaluateFit(candidate, job, data.companyInfo); 
+            updateApplicationAiScore(appId, result.score, result.reasoning); 
+            refreshData(); 
+        } catch (e) { alert("Errore valutazione AI: " + e); } finally { setEvaluatingId(null); } 
+    };
+    
     const handleDragStart = (e: React.DragEvent, appId: string) => { setDraggedAppId(appId); e.dataTransfer.effectAllowed = 'move'; };
     const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
     const handleDrop = (e: React.DragEvent, status: SelectionStatus) => { e.preventDefault(); if (draggedAppId) { if (status === SelectionStatus.REJECTED) { setPendingRejection({ appId: draggedAppId, status }); } else { updateApplicationStatus(draggedAppId, status); refreshData(); } setDraggedAppId(null); } };

@@ -1,11 +1,8 @@
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, UploadCloud } from 'lucide-react';
-import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud } from '../services/storage';
+import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, UploadCloud, Building2 } from 'lucide-react';
+import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud, getCompanyInfo, updateCompanyInfo } from '../services/storage';
 import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig } from '../services/firebase';
-import { AppState, User, UserRole, BackupMetadata, DeletedItem } from '../types';
+import { AppState, User, UserRole, BackupMetadata, DeletedItem, CompanyInfo } from '../types';
 
 interface SettingsViewProps {
     refreshData: () => void;
@@ -18,6 +15,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
     const [firebaseConfigStr, setFirebaseConfigStr] = useState('');
     const [currentConfig, setCurrentConfig] = useState<FirebaseConfig | null>(null);
     const [parseError, setParseError] = useState<string | null>(null);
+
+    // Company Info State
+    const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({ name: '', industry: '', description: '', productsServices: '' });
+    const [isSavingCompany, setIsSavingCompany] = useState(false);
 
     // Backup State
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -57,6 +58,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         if (currentUser?.role === UserRole.ADMIN) {
             loadUsers();
         }
+
+        // Load Company Info
+        loadCompanyInfo();
     }, [currentUser]);
 
     const loadUsers = async () => {
@@ -64,6 +68,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         const userList = await getAllUsers();
         setUsers(userList);
         setIsLoadingUsers(false);
+    };
+
+    const loadCompanyInfo = async () => {
+        const info = await getCompanyInfo();
+        if (info) setCompanyInfo(info);
     };
 
     const loadCloudBackups = async () => {
@@ -77,6 +86,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         await updateUserRole(uid, newRole);
         // Optimistic update
         setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
+    };
+
+    const handleSaveCompanyInfo = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSavingCompany(true);
+        try {
+            await updateCompanyInfo(companyInfo);
+            refreshData(); // To propagate context to AI services if they read from state
+            alert("Informazioni aziendali salvate con successo.");
+        } catch (error) {
+            console.error(error);
+            alert("Errore durante il salvataggio.");
+        } finally {
+            setIsSavingCompany(false);
+        }
     };
 
     const parseFirebaseConfig = (input: string): any => {
@@ -262,6 +286,74 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
             </div>
             
             <div className="space-y-8">
+                 {/* COMPANY INFO SECTION */}
+                 {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Building2 size={20} className="text-indigo-600"/> Informazioni Aziendali
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Compila questi dati per permettere all'AI di generare Job Description, Schede di Valutazione e Analisi di Fit più precise e contestualizzate.
+                        </p>
+                        <form onSubmit={handleSaveCompanyInfo} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Ragione Sociale</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900"
+                                        placeholder="es. Acme Corp SpA"
+                                        value={companyInfo.name}
+                                        onChange={e => setCompanyInfo({...companyInfo, name: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Settore / Industry</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900"
+                                        placeholder="es. SaaS Fintech"
+                                        value={companyInfo.industry}
+                                        onChange={e => setCompanyInfo({...companyInfo, industry: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Prodotti e Servizi Offerti</label>
+                                <textarea 
+                                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900"
+                                    rows={2}
+                                    placeholder="Elenca i principali prodotti o servizi (es. Piattaforma di pagamenti B2B, API per banche...)"
+                                    value={companyInfo.productsServices || ''}
+                                    onChange={e => setCompanyInfo({...companyInfo, productsServices: e.target.value})}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Descrizione Aziendale e Valori</label>
+                                <textarea 
+                                    className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900"
+                                    rows={3}
+                                    placeholder="Breve descrizione dell'azienda, missione e cultura..."
+                                    value={companyInfo.description}
+                                    onChange={e => setCompanyInfo({...companyInfo, description: e.target.value})}
+                                />
+                            </div>
+
+                            <div className="flex justify-end">
+                                <button 
+                                    type="submit" 
+                                    disabled={isSavingCompany}
+                                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 shadow-sm disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {isSavingCompany ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salva Info
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                 )}
+
                 {/* ADMIN: USER MANAGEMENT */}
                 {currentUser?.role === UserRole.ADMIN && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
