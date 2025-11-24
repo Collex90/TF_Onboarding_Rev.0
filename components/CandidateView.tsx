@@ -1,9 +1,10 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Candidate, JobPosition, Application, User, Comment, StatusLabels, StatusColors, CandidateStatus, CandidateStatusLabels, CandidateStatusColors } from '../types';
-import { Plus, Upload, FileText, Sparkles, X, Users, Search, Pencil, UploadCloud, AlertTriangle, CheckCircle, Loader2, Trash2, Download, MessageSquare, Clock, Briefcase, Send, Building, Banknote, Eye, Maximize2, Minimize2, ZoomIn, ZoomOut, Phone, Mail, LayoutGrid, List, ChevronUp, ChevronDown, CheckSquare, Square, Star } from 'lucide-react';
+import { Candidate, JobPosition, Application, User, Comment, StatusLabels, StatusColors, CandidateStatus, CandidateStatusLabels, CandidateStatusColors, Attachment, UserRole } from '../types';
+import { Plus, Upload, FileText, Sparkles, X, Users, Search, Pencil, UploadCloud, AlertTriangle, CheckCircle, Loader2, Trash2, Download, MessageSquare, Clock, Briefcase, Send, Building, Banknote, Eye, Maximize2, Minimize2, ZoomIn, ZoomOut, Phone, Mail, LayoutGrid, List, ChevronUp, ChevronDown, CheckSquare, Square, Star, Paperclip, Flag, Table, Image } from 'lucide-react';
 import { parseCV, ParsedCVData } from '../services/ai';
-import { addCandidate, updateCandidate, generateId, addCandidateComment, deleteCandidate } from '../services/storage';
+import { addCandidate, updateCandidate, generateId, addCandidateComment, deleteCandidate, addCandidateAttachment, deleteCandidateAttachment } from '../services/storage';
+import { OnboardingSetupModal } from './OnboardingSetupModal';
 
 interface CandidateViewProps {
     candidates: Candidate[];
@@ -14,10 +15,17 @@ interface CandidateViewProps {
     onUpload: (files: File[]) => void;
 }
 
-// Internal component to render a single page
+// Helper for file icons
+const getFileIcon = (mimeType: string) => {
+    if (mimeType.includes('pdf')) return <FileText size={16} className="text-red-500"/>;
+    if (mimeType.includes('sheet') || mimeType.includes('excel')) return <Table size={16} className="text-green-600"/>;
+    if (mimeType.includes('image')) return <Image size={16} className="text-purple-500"/>;
+    return <FileText size={16} className="text-indigo-500"/>;
+};
+
+// ... Keep PdfPage, PdfPreview, DeleteConfirmationModal helper components as is ...
 const PdfPage: React.FC<{ pdf: any, pageNumber: number, scale: number }> = ({ pdf, pageNumber, scale }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    
     useEffect(() => {
         const renderPage = async () => {
             const page = await pdf.getPage(pageNumber);
@@ -35,7 +43,6 @@ const PdfPage: React.FC<{ pdf: any, pageNumber: number, scale: number }> = ({ pd
         };
         renderPage();
     }, [pdf, pageNumber, scale]);
-
     return <canvas ref={canvasRef} className="shadow-md rounded bg-white mb-4 block" />;
 };
 
@@ -59,11 +66,8 @@ const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mi
                 for (let i = 0; i < len; i++) {
                     bytes[i] = binaryString.charCodeAt(i);
                 }
-
-                // Explicitly cast window to any to access pdfjsLib
                 const pdfjs = (window as any).pdfjsLib;
                 if (!pdfjs) throw new Error("PDF Lib not found");
-
                 const pdf = await pdfjs.getDocument({ data: bytes }).promise;
                 setPdfDoc(pdf);
                 setNumPages(pdf.numPages);
@@ -77,11 +81,9 @@ const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mi
         loadPdf();
     }, [base64, mimeType]);
 
-    // Native Event Listener to prevent Browser Zoom (Ctrl+Wheel)
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
-
         const handleWheel = (e: WheelEvent) => {
             if (e.ctrlKey) {
                 e.preventDefault(); 
@@ -89,12 +91,8 @@ const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mi
                 setScale(prev => Math.min(Math.max(0.3, prev + delta), 4));
             }
         };
-
         container.addEventListener('wheel', handleWheel, { passive: false });
-
-        return () => {
-            container.removeEventListener('wheel', handleWheel);
-        };
+        return () => { container.removeEventListener('wheel', handleWheel); };
     }, []);
 
     return (
@@ -105,36 +103,16 @@ const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mi
                     {error && <div className="text-red-500 bg-white p-4 rounded shadow">{error}</div>}
                     
                     {!mimeType.includes('pdf') ? (
-                        <img 
-                            src={`data:${mimeType};base64,${base64}`} 
-                            className="shadow-lg rounded bg-white transition-all duration-75 ease-linear block" 
-                            style={{ 
-                                width: imgDimensions.width ? `${imgDimensions.width * scale}px` : 'auto',
-                                maxWidth: 'none'
-                            }} 
-                            onLoad={(e) => setImgDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-                            alt="Preview" 
-                        />
+                        <img src={`data:${mimeType};base64,${base64}`} className="shadow-lg rounded bg-white transition-all duration-75 ease-linear block" style={{ width: imgDimensions.width ? `${imgDimensions.width * scale}px` : 'auto', maxWidth: 'none' }} onLoad={(e) => setImgDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} alt="Preview" />
                     ) : (
-                        pdfDoc && (
-                            <div className="flex flex-col items-center">
-                                {Array.from(new Array(numPages), (el, index) => (
-                                    <PdfPage key={index} pdf={pdfDoc} pageNumber={index + 1} scale={scale} />
-                                ))}
-                            </div>
-                        )
+                        pdfDoc && (<div className="flex flex-col items-center">{Array.from(new Array(numPages), (el, index) => (<PdfPage key={index} pdf={pdfDoc} pageNumber={index + 1} scale={scale} />))}</div>)
                     )}
                 </div>
             </div>
-            
             <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur shadow-xl border border-gray-200 rounded-full px-4 py-2 flex items-center gap-4 z-50">
-                <button onClick={() => setScale(s => Math.max(0.2, s - 0.1))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-700" title="Zoom Out">
-                    <ZoomOut size={20} />
-                </button>
+                <button onClick={() => setScale(s => Math.max(0.2, s - 0.1))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-700" title="Zoom Out"><ZoomOut size={20} /></button>
                 <span className="text-xs font-bold w-12 text-center text-gray-800">{Math.round(scale * 100)}%</span>
-                <button onClick={() => setScale(s => Math.min(4.0, s + 0.1))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-700" title="Zoom In">
-                    <ZoomIn size={20} />
-                </button>
+                <button onClick={() => setScale(s => Math.min(4.0, s + 0.1))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-700" title="Zoom In"><ZoomIn size={20} /></button>
             </div>
         </div>
     );
@@ -162,20 +140,8 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, 
                         Sei sicuro? I dati verranno spostati nel cestino e rimossi da tutti i processi di selezione.
                     </p>
                     <div className="flex gap-3 w-full">
-                        <button 
-                            onClick={onClose}
-                            disabled={isDeleting}
-                            className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
-                        >
-                            Annulla
-                        </button>
-                        <button 
-                            onClick={onConfirm}
-                            disabled={isDeleting}
-                            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                            {isDeleting ? <Loader2 size={16} className="animate-spin"/> : 'Elimina'}
-                        </button>
+                        <button onClick={onClose} disabled={isDeleting} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50">Annulla</button>
+                        <button onClick={onConfirm} disabled={isDeleting} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50">{isDeleting ? <Loader2 size={16} className="animate-spin"/> : 'Elimina'}</button>
                     </div>
                 </div>
             </div>
@@ -186,16 +152,18 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, 
 export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, applications, refreshData, currentUser, onUpload }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [viewingCandidate, setViewingCandidate] = useState<Candidate | null>(null);
-    const [quickViewTab, setQuickViewTab] = useState<'info' | 'processes' | 'comments'>('info');
+    const [quickViewTab, setQuickViewTab] = useState<'info' | 'processes' | 'comments' | 'attachments'>('info');
     const [newComment, setNewComment] = useState('');
+    const commentInputRef = useRef<HTMLTextAreaElement>(null);
     
     const [isPhotoZoomed, setIsPhotoZoomed] = useState(false);
     const [isCvPreviewOpen, setIsCvPreviewOpen] = useState(false);
 
     const [isLoading, setIsLoading] = useState(false);
-    const [isSaving, setIsSaving] = useState(false); // New state for save button
+    const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const attachmentInputRef = useRef<HTMLInputElement>(null);
     const bulkInputRef = useRef<HTMLInputElement>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -210,6 +178,9 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     // Delete State
     const [deleteCandidateIds, setDeleteCandidateIds] = useState<Set<string>>(new Set());
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Onboarding Setup
+    const [isOnboardingSetupOpen, setIsOnboardingSetupOpen] = useState(false);
 
     const [formData, setFormData] = useState<Partial<Candidate>>({
         fullName: '', email: '', phone: '', age: undefined, skills: [], summary: '',
@@ -227,8 +198,14 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         // Clear selections on search change
         setSelectedIds(new Set());
     }, [searchTerm]);
+    
+    useEffect(() => {
+        if (quickViewTab === 'comments' && commentInputRef.current) {
+            commentInputRef.current.focus();
+        }
+    }, [quickViewTab]);
 
-    // Filter & Sort
+    // ... Filter & Sort Logic (Keep same) ...
     const processedCandidates = useMemo(() => {
         let filtered = candidates;
         if (searchTerm) {
@@ -247,8 +224,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             filtered = [...filtered].sort((a: Candidate, b: Candidate) => {
                 let valA: any = (a as any)[sortConfig.key];
                 let valB: any = (b as any)[sortConfig.key];
-
-                // Handle specific sorts
                 if (sortConfig.key === 'positions') {
                     valA = applications.filter(app => app.candidateId === a.id).length;
                     valB = applications.filter(app => app.candidateId === b.id).length;
@@ -257,11 +232,9 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                     valA = valA.toLowerCase();
                     valB = valB.toLowerCase();
                 } else {
-                    // Fallback for mixed types or non-string
                     valA = valA || 0;
                     valB = valB || 0;
                 }
-
                 if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
                 if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
@@ -325,7 +298,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             setViewingCandidate(null);
             setIsModalOpen(false);
             setDeleteCandidateIds(new Set());
-            setSelectedIds(new Set()); // Clear selection
+            setSelectedIds(new Set());
         } catch (error: any) {
             console.error("Delete error:", error);
             alert("Errore durante l'eliminazione: " + error.message);
@@ -355,6 +328,14 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     const handleInlineStatusChange = async (candidate: Candidate, status: CandidateStatus) => {
         await updateCandidate({ ...candidate, status });
         refreshData();
+    };
+    
+    const handleCandidateUpdate = async (field: keyof Candidate, value: any) => { 
+        if (!viewingCandidate) return; 
+        const updatedCandidate = { ...viewingCandidate, [field]: value }; 
+        setViewingCandidate(updatedCandidate); 
+        await updateCandidate(updatedCandidate); 
+        refreshData(); 
     };
 
     const openAddModal = () => {
@@ -405,6 +386,40 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         } catch (err: any) { setError('Errore lettura file.'); setIsLoading(false); }
     };
 
+    const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if(!viewingCandidate || !e.target.files?.length || !currentUser) return;
+        const files = Array.from(e.target.files);
+        
+        for (const file of files) {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const base64 = (reader.result as string).split(',')[1];
+                const attachment: Attachment = {
+                    id: generateId(),
+                    name: file.name,
+                    type: file.type,
+                    dataBase64: base64,
+                    uploadedBy: currentUser.name,
+                    createdAt: Date.now()
+                };
+                await addCandidateAttachment(viewingCandidate.id, attachment);
+                // Local optimistic update
+                setViewingCandidate(prev => prev ? { ...prev, attachments: [...(prev.attachments || []), attachment] } : null);
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        refreshData();
+        if(attachmentInputRef.current) attachmentInputRef.current.value = '';
+    };
+
+    const handleDeleteAttachment = async (attachmentId: string) => {
+        if(!viewingCandidate || !confirm("Eliminare allegato?")) return;
+        await deleteCandidateAttachment(viewingCandidate.id, attachmentId);
+        setViewingCandidate(prev => prev ? { ...prev, attachments: prev.attachments?.filter(a => a.id !== attachmentId) } : null);
+        refreshData();
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.fullName || !formData.email) return;
@@ -421,7 +436,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                 status: formData.status || CandidateStatus.CANDIDATE
             };
 
-            // AWAIT THE ASYNC OPERATIONS TO PREVENT RACE CONDITION
             if (editingId) {
                 const existing = candidates.find(c => c.id === editingId);
                 if(existing) {
@@ -453,6 +467,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         setViewingCandidate(prev => prev ? { ...prev, comments: [...(prev.comments || []), comment] } : null);
         setNewComment('');
         refreshData();
+        // Keep focus
+        setTimeout(() => commentInputRef.current?.focus(), 100);
     };
 
     const handleCommentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -484,6 +500,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
 
     return (
         <div className="p-8 h-full overflow-y-auto flex flex-col">
+            {/* ... Keep Search/Toolbar JSX same as before ... */}
             <div className="flex justify-between items-start mb-6 gap-4 flex-wrap">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Database Candidati</h2>
@@ -566,6 +583,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                 </div>
             )}
 
+            {/* ... Keep Grid/Card Rendering same ... */}
             {viewMode === 'card' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
                     {processedCandidates.map(candidate => (
@@ -718,7 +736,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                 </div>
             )}
 
-            {/* Add/Edit Modal */}
+            {/* Add/Edit Modal (Keep same) */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm p-4 overflow-y-auto">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl m-auto" onClick={e => e.stopPropagation()}>
@@ -831,10 +849,25 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                             <div>
                                                 <h2 className="text-2xl font-bold text-gray-900">{viewingCandidate.fullName}</h2>
                                                 <div className="flex items-center gap-2 mt-1 text-gray-500 text-sm"><Mail size={14}/> {viewingCandidate.email}</div>
-                                                {viewingCandidate.phone && <div className="flex items-center gap-2 mt-1 text-gray-500 text-sm"><Phone size={14}/> {viewingCandidate.phone}</div>}
+                                                <div className="flex items-center gap-2 mt-1 text-gray-500 text-sm"><Phone size={14}/> 
+                                                    <input 
+                                                        className="bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 outline-none w-32" 
+                                                        value={viewingCandidate.phone || ''}
+                                                        onChange={e => handleCandidateUpdate('phone', e.target.value)}
+                                                        placeholder="Aggiungi telefono"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
+                                            {viewingCandidate.status === CandidateStatus.HIRED && (
+                                                <button 
+                                                    onClick={() => setIsOnboardingSetupOpen(true)}
+                                                    className="flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-200 transition-colors"
+                                                >
+                                                    <Flag size={14}/> Onboarding
+                                                </button>
+                                            )}
                                             <div className="flex gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
                                                 <button onClick={() => openEditModal(viewingCandidate)} className="p-2 hover:bg-indigo-50 hover:text-indigo-600 rounded text-gray-400 transition-colors" title="Modifica"><Pencil size={18}/></button>
                                                 <button onClick={() => setDeleteCandidateIds(new Set([viewingCandidate.id]))} className="p-2 hover:bg-red-50 hover:text-red-600 rounded text-gray-400 transition-colors" title="Elimina"><Trash2 size={18}/></button>
@@ -842,9 +875,9 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                             <button onClick={() => setViewingCandidate(null)} className="p-2 text-gray-400 hover:text-gray-600"><X size={24}/></button>
                                         </div>
                                     </div>
-                                    <div className="flex gap-1 border-b border-gray-200">
-                                        {[{id:'info', label:'Informazioni', icon:FileText}, {id:'processes', label:'Processi', icon:Briefcase}, {id:'comments', label:'Commenti', icon:MessageSquare}].map(tab => (
-                                            <button key={tab.id} onClick={() => setQuickViewTab(tab.id as any)} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold uppercase tracking-wide border-b-2 transition-colors ${quickViewTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{React.createElement(tab.icon, { size: 14 })} {tab.label}</button>
+                                    <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+                                        {[{id:'info', label:'Informazioni', icon:FileText}, {id:'processes', label:'Processi', icon:Briefcase}, {id:'comments', label:'Commenti', icon:MessageSquare}, {id:'attachments', label:'Allegati', icon:Paperclip}].map(tab => (
+                                            <button key={tab.id} onClick={() => setQuickViewTab(tab.id as any)} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold uppercase tracking-wide border-b-2 transition-colors whitespace-nowrap ${quickViewTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{React.createElement(tab.icon, { size: 14 })} {tab.label}</button>
                                         ))}
                                     </div>
                                 </div>
@@ -853,8 +886,26 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                     {quickViewTab === 'info' && (
                                         <div className="space-y-6">
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100"><span className="block text-xs font-bold text-gray-400 uppercase mb-1">Età</span><span className="text-lg font-bold text-gray-800">{viewingCandidate.age || '-'}</span></div>
-                                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100"><span className="block text-xs font-bold text-gray-400 uppercase mb-1">Stato</span><span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${CandidateStatusColors[viewingCandidate.status]}`}>{CandidateStatusLabels[viewingCandidate.status]}</span></div>
+                                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                                    <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Età</span>
+                                                    <input 
+                                                        type="number" 
+                                                        className="text-lg font-bold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 outline-none w-full"
+                                                        value={viewingCandidate.age || ''}
+                                                        onChange={e => handleCandidateUpdate('age', parseInt(e.target.value))}
+                                                        placeholder="-"
+                                                    />
+                                                </div>
+                                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                                    <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Stato</span>
+                                                    <select 
+                                                        value={viewingCandidate.status}
+                                                        onChange={(e) => handleCandidateUpdate('status', e.target.value)}
+                                                        className={`inline-block px-2 py-1 rounded text-xs font-bold border outline-none cursor-pointer w-full ${CandidateStatusColors[viewingCandidate.status]}`}
+                                                    >
+                                                        {Object.values(CandidateStatus).map(s => <option key={s} value={s}>{CandidateStatusLabels[s]}</option>)}
+                                                    </select>
+                                                </div>
                                             </div>
                                             
                                             <div><h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Skills</h4><div className="flex flex-wrap gap-2">{viewingCandidate.skills.map((s, i) => (<span key={i} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium border border-indigo-100">{s}</span>))}</div></div>
@@ -895,9 +946,52 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                                 {!viewingCandidate.comments || viewingCandidate.comments.length === 0 ? <p className="text-center text-gray-400 text-sm py-8 italic">Nessun commento.</p> : viewingCandidate.comments.map((comment) => (<div key={comment.id} className="bg-gray-50 p-3 rounded-xl rounded-tl-none border border-gray-100 ml-2"><div className="flex items-center justify-between mb-1"><span className="text-xs font-bold text-gray-900">{comment.authorName}</span><span className="text-[10px] text-gray-400 flex items-center gap-1"><Clock size={10}/> {new Date(comment.createdAt).toLocaleDateString()}</span></div><p className="text-sm text-gray-900">{comment.text}</p></div>))}
                                             </div>
                                             <div className="relative mt-auto pt-4 border-t border-gray-100">
-                                                <textarea className="text-gray-900 w-full bg-white border border-gray-200 rounded-xl p-3 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none" rows={3} placeholder="Scrivi una nota... (Ctrl+Enter per inviare)" value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={handleCommentKeyDown} />
+                                                <textarea ref={commentInputRef} className="text-gray-900 w-full bg-white border border-gray-200 rounded-xl p-3 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none" rows={3} placeholder="Scrivi una nota... (Ctrl+Enter per inviare)" value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={handleCommentKeyDown} />
                                                 <button onClick={handleAddComment} disabled={!newComment.trim()} className="absolute right-3 bottom-3 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"><Send size={16} /></button>
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {quickViewTab === 'attachments' && (
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h4 className="text-xs font-bold text-gray-400 uppercase">File Allegati</h4>
+                                                <input type="file" multiple ref={attachmentInputRef} className="hidden" onChange={handleAttachmentUpload}/>
+                                                <button onClick={() => attachmentInputRef.current?.click()} className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 font-bold flex items-center gap-1">
+                                                    <Upload size={12}/> Carica
+                                                </button>
+                                            </div>
+                                            {!viewingCandidate.attachments || viewingCandidate.attachments.length === 0 ? (
+                                                <p className="text-center text-gray-400 text-sm py-8 italic border-2 border-dashed border-gray-100 rounded-xl">Nessun file extra allegato.</p>
+                                            ) : (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {viewingCandidate.attachments.map(file => (
+                                                        <div key={file.id} className="border border-gray-200 rounded-lg p-3 hover:shadow-sm bg-gray-50">
+                                                            <div className="flex items-start justify-between mb-2">
+                                                                <div className="p-2 bg-white rounded shadow-sm">
+                                                                    {getFileIcon(file.type)}
+                                                                </div>
+                                                                <div className="flex gap-1">
+                                                                    <a href={`data:${file.type};base64,${file.dataBase64}`} download={file.name} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Download size={16}/></a>
+                                                                    {(currentUser?.role === UserRole.ADMIN || file.uploadedBy === currentUser?.name) && (
+                                                                        <button 
+                                                                            onClick={() => handleDeleteAttachment(file.id)}
+                                                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                                                        >
+                                                                            <Trash2 size={16}/>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-xs font-bold text-gray-900 truncate mb-1" title={file.name}>{file.name}</p>
+                                                            <div className="flex justify-between text-[10px] text-gray-500">
+                                                                <span>{new Date(file.createdAt).toLocaleDateString()}</span>
+                                                                <span>{file.uploadedBy}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -918,6 +1012,17 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ONBOARDING SETUP MODAL TRIGGERED FROM QUICK VIEW */}
+            {isOnboardingSetupOpen && viewingCandidate && (
+                <OnboardingSetupModal 
+                    isOpen={isOnboardingSetupOpen}
+                    onClose={() => setIsOnboardingSetupOpen(false)}
+                    candidate={viewingCandidate}
+                    job={jobs.find(j => applications.some(a => a.candidateId === viewingCandidate.id && a.jobId === j.id)) || jobs[0]} // Simplistic fallback for job
+                    onProcessCreated={() => { setIsOnboardingSetupOpen(false); refreshData(); }}
+                />
             )}
 
             {/* CUSTOM DELETE CONFIRMATION MODAL */}

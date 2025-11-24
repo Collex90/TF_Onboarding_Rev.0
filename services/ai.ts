@@ -117,9 +117,9 @@ export const generateJobDetails = async (title: string, department: string, comp
 
     if (!ai) return mockJob;
 
-    let systemInstruction = "Genera Job Description sintetica (max 300 char) e requisiti puntati.";
+    let systemInstruction = "Genera Job Description sintetica (max 300 char) e requisiti. IMPORTANTE: Usa SOLO testo semplice e elenchi puntati Markdown (con il trattino -). NON usare MAI tag HTML come <ul> o <li>.";
     if (companyContext && companyContext.name) {
-        systemInstruction = `Sei un HR Manager per l'azienda ${companyContext.name} operante nel settore ${companyContext.industry}. Descrizione azienda: "${companyContext.description}". Genera una Job Description e Requisiti specifici per questa realtà.`;
+        systemInstruction = `Sei un HR Manager per l'azienda ${companyContext.name} operante nel settore ${companyContext.industry}. Descrizione azienda: "${companyContext.description}". Genera una Job Description e Requisiti specifici per questa realtà. IMPORTANTE: Usa SOLO testo semplice e elenchi puntati Markdown (con il trattino -). NON usare MAI tag HTML come <ul> o <li>.`;
     }
 
     try {

@@ -1,6 +1,8 @@
+
 import React from 'react';
-import { AppState, SelectionStatus, StatusLabels, StatusColors } from '../types';
-import { Users, Briefcase, FileText, TrendingUp, Activity, Percent, BrainCircuit } from 'lucide-react';
+import { AppState, SelectionStatus, StatusLabels, StatusColors, UserRole } from '../types';
+import { Users, Briefcase, FileText, TrendingUp, Activity, Percent, BrainCircuit, Flag, CheckCircle } from 'lucide-react';
+import { auth } from '../services/firebase';
 
 interface DashboardViewProps {
     data: AppState;
@@ -8,6 +10,9 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ data, onNavigate }) => {
+    // Current User
+    const currentUserRole = auth?.currentUser ? (data.jobs.length > 0 ? UserRole.ADMIN : UserRole.HR) : UserRole.HR; // Simplified logic, ideally pass user prop
+
     // KPI Calculations
     const totalCandidates = data.candidates.length;
     const activeJobs = data.jobs.filter(j => j.status === 'OPEN').length;
@@ -19,6 +24,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onNavigate }
         data.applications.filter(a => a.aiScore).reduce((acc, curr) => acc + (curr.aiScore || 0), 0) / 
         (data.applications.filter(a => a.aiScore).length || 1)
     );
+
+    // Onboarding Stats
+    const totalOnboarding = data.onboarding.length;
+    const completedOnboarding = data.onboarding.filter(o => o.status === 'COMPLETED').length;
+    const inProgressOnboarding = data.onboarding.filter(o => o.status === 'IN_PROGRESS').length;
+    const cancelledOnboarding = data.onboarding.filter(o => o.status === 'CANCELLED').length;
+    const toStartOnboarding = data.onboarding.filter(o => o.status === 'TO_START').length;
 
     // Funnel Data
     const funnelOrder = [
@@ -120,32 +132,61 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ data, onNavigate }
                     </div>
                 </div>
                 
-                {/* RECENT ACTIVITY */}
+                {/* ONBOARDING STATUS (Admin/HR Only) */}
                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col">
-                    <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
-                        <Activity size={20} className="text-indigo-600"/> Ultimi Candidati
+                     <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+                        <Flag size={20} className="text-indigo-600"/> Stato Onboarding
                     </h3>
-                    <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-2">
-                        {recentCandidates.length === 0 && <p className="text-gray-400 text-sm italic">Nessuna attività recente.</p>}
-                        {recentCandidates.map(c => (
-                            <div key={c.id} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
-                                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-                                    {c.photo ? (
-                                        <img src={`data:image/jpeg;base64,${c.photo}`} alt="" className="w-full h-full object-cover"/>
-                                    ) : (
-                                        <span className="text-xs font-bold text-gray-600">{c.fullName.charAt(0)}</span>
-                                    )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-bold text-gray-900 truncate">{c.fullName}</p>
-                                    <p className="text-xs text-gray-500 truncate">Inserito il {new Date(c.createdAt).toLocaleDateString()}</p>
+                    <div className="flex-1 flex flex-col justify-center space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span className="text-sm font-medium text-gray-600">Da Iniziare</span>
+                            <span className="font-bold text-gray-900">{toStartOnboarding}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                            <span className="text-sm font-medium text-blue-700">In Corso</span>
+                            <span className="font-bold text-blue-900">{inProgressOnboarding}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                            <span className="text-sm font-medium text-green-700">Completati</span>
+                            <span className="font-bold text-green-900">{completedOnboarding}</span>
+                        </div>
+                         <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                            <span className="text-sm font-medium text-red-700">Annullati</span>
+                            <span className="font-bold text-red-900">{cancelledOnboarding}</span>
+                        </div>
+                    </div>
+                    <div className="mt-6 pt-4 border-t border-gray-100 text-center">
+                        <p className="text-xs text-gray-500 mb-2">Totale processi attivi o storici</p>
+                        <span className="text-2xl font-bold text-gray-900">{totalOnboarding}</span>
+                    </div>
+                </div>
+            </div>
+            
+            {/* RECENT ACTIVITY */}
+            <div className="mt-8 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                 <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+                    <Activity size={20} className="text-indigo-600"/> Ultimi Candidati Inseriti
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {recentCandidates.length === 0 && <p className="text-gray-400 text-sm italic col-span-3 text-center py-4">Nessuna attività recente.</p>}
+                    {recentCandidates.map(c => (
+                        <div key={c.id} className="flex items-center gap-3 p-4 hover:bg-gray-50 rounded-lg transition-colors border border-gray-100">
+                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                                {c.photo ? (
+                                    <img src={`data:image/jpeg;base64,${c.photo}`} alt="" className="w-full h-full object-cover"/>
+                                ) : (
+                                    <span className="text-sm font-bold text-gray-600">{c.fullName.charAt(0)}</span>
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-gray-900 truncate">{c.fullName}</p>
+                                <p className="text-xs text-gray-500 truncate mb-1">Inserito il {new Date(c.createdAt).toLocaleDateString()}</p>
+                                <div className="flex gap-1">
+                                    {c.skills.slice(0, 2).map((s, i) => <span key={i} className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{s}</span>)}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                    <button onClick={() => onNavigate('candidates')} className="mt-4 w-full py-2 text-sm text-indigo-600 font-medium hover:bg-indigo-50 rounded-lg transition-colors">
-                        Vedi tutti
-                    </button>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>

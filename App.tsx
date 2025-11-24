@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { CandidateView } from './components/CandidateView';
@@ -431,7 +430,7 @@ function App() {
         user={user}
         onLogout={handleLogout}
       />
-      <main className="flex-1 h-screen overflow-hidden relative transition-all duration-300">
+      <main className="flex-1 h-screen overflow-hidden relative">
         {renderContent()}
       </main>
 

@@ -70,6 +70,15 @@ export interface Comment {
     createdAt: number;
 }
 
+export interface Attachment {
+    id: string;
+    name: string;
+    type: string; // mimeType
+    dataBase64: string;
+    uploadedBy: string;
+    createdAt: number;
+}
+
 export interface Candidate {
   id: string;
   fullName: string;
@@ -82,6 +91,7 @@ export interface Candidate {
   cvFileBase64?: string;
   cvMimeType?: string;
   comments?: Comment[];
+  attachments?: Attachment[];
   
   status: CandidateStatus; 
 
@@ -166,6 +176,22 @@ export const OnboardingPhaseLabels: Record<OnboardingPhase, string> = {
     [OnboardingPhase.MONTH_1]: 'Primo Mese'
 };
 
+export type OnboardingStatus = 'TO_START' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+
+export const OnboardingStatusLabels: Record<OnboardingStatus, string> = {
+    'TO_START': 'Da Iniziare',
+    'IN_PROGRESS': 'In Corso',
+    'COMPLETED': 'Completato',
+    'CANCELLED': 'Annullato'
+};
+
+export const OnboardingStatusColors: Record<OnboardingStatus, string> = {
+    'TO_START': 'bg-gray-100 text-gray-700 border-gray-200',
+    'IN_PROGRESS': 'bg-blue-100 text-blue-700 border-blue-200',
+    'COMPLETED': 'bg-green-100 text-green-700 border-green-200',
+    'CANCELLED': 'bg-red-50 text-red-700 border-red-200'
+};
+
 export interface OnboardingTask {
     id: string;
     description: string;
@@ -174,16 +200,19 @@ export interface OnboardingTask {
     assigneeId?: string; // UID of the user responsible for this task
     dueDate?: number; // Timestamp
     isCompleted: boolean;
+    comments?: Comment[];
+    attachments?: Attachment[];
 }
 
 export interface OnboardingProcess {
     id: string;
     candidateId: string;
     jobId: string;
-    status: 'IN_PROGRESS' | 'COMPLETED';
+    status: OnboardingStatus;
     startDate: number;
     phaseConfig?: Record<string, string>; // Maps phase enum keys to Custom Label
     tasks: OnboardingTask[];
+    comments?: Comment[];
 }
 
 export interface OnboardingTemplate {

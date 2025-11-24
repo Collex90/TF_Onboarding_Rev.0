@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate } from '../types';
 import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings } from 'lucide-react';
-import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, deleteJob } from '../services/storage';
+import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate } from '../services/storage';
 import { evaluateFit, generateJobDetails, generateScorecardSchema } from '../services/ai';
 
 interface RecruitmentViewProps {
@@ -169,7 +169,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
     useEffect(() => {
         if (isJobModalOpen && (currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR)) {
-            getAllUsers().then(users => setAvailableUsers(users.filter(u => !u.isDeleted)));
+            getAllUsers().then(setAvailableUsers);
         }
     }, [isJobModalOpen, currentUser]);
 
@@ -201,26 +201,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         setIsJobModalOpen(true);
     };
 
-    const handleDeleteJob = async (e: React.MouseEvent, jobId: string) => {
-        e.preventDefault();
-        e.stopPropagation();
-        try {
-            const appCount = data.applications.filter(a => a.jobId === jobId).length;
-            if (appCount > 0) {
-                alert(`Non puoi eliminare questa posizione perché ci sono ${appCount} candidati associati. Elimina o sposta i candidati prima di procedere.`);
-                return;
-            }
-            if (window.confirm("Sei sicuro di voler eliminare questa posizione lavorativa? L'operazione è irreversibile.")) {
-                await deleteJob(jobId);
-                refreshData();
-                if (selectedJobId === jobId) setSelectedJobId(null);
-            }
-        } catch (error: any) {
-            console.error("Delete error", error);
-            alert("Errore durante l'eliminazione: " + error.message);
-        }
-    };
-
     // Scorecard Edit Handlers (Job Modal)
     const handleAddCategory = () => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: [ ...(prev.scorecardSchema?.categories || []), { id: generateId(), name: 'Nuova Categoria', items: [] } ] } })); };
     const handleDeleteCategory = (catId: string) => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: (prev.scorecardSchema?.categories || []).filter(c => c.id !== catId) } })); };
@@ -243,32 +223,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         setIsJobModalOpen(false);
     };
 
-    // --- AI GENERATORS WITH COMPANY CONTEXT ---
-    const handleGenerateJobAI = async () => { 
-        if (!jobForm.title || !jobForm.department) { alert("Inserisci Titolo e Dipartimento."); return; } 
-        setIsGeneratingJob(true); 
-        try { 
-            const details = await generateJobDetails(jobForm.title, jobForm.department, data.companyInfo); 
-            setJobForm(prev => ({ ...prev, description: details.description, requirements: details.requirements })); 
-        } catch (e) { 
-            alert("Errore AI: impossibile generare dettagli."); 
-        } finally { 
-            setIsGeneratingJob(false); 
-        } 
-    };
-
-    const handleGenerateScorecardAI = async () => { 
-        if (!jobForm.title || !jobForm.description) { alert("Inserisci Titolo e Descrizione prima di generare la scheda."); return; } 
-        setIsGeneratingScorecard(true); 
-        try { 
-            const schema = await generateScorecardSchema(jobForm.title, jobForm.description, data.companyInfo); 
-            setJobForm(prev => ({ ...prev, scorecardSchema: schema })); 
-        } catch(e) { 
-            alert("Errore AI Scorecard."); 
-        } finally { 
-            setIsGeneratingScorecard(false); 
-        } 
-    };
+    const handleGenerateJobAI = async () => { if (!jobForm.title || !jobForm.department) { alert("Inserisci Titolo e Dipartimento."); return; } setIsGeneratingJob(true); try { const details = await generateJobDetails(jobForm.title, jobForm.department); setJobForm(prev => ({ ...prev, description: details.description, requirements: details.requirements })); } catch (e) { alert("Errore AI: impossibile generare dettagli."); } finally { setIsGeneratingJob(false); } };
+    const handleGenerateScorecardAI = async () => { if (!jobForm.title || !jobForm.description) { alert("Inserisci Titolo e Descrizione prima di generare la scheda."); return; } setIsGeneratingScorecard(true); try { const schema = await generateScorecardSchema(jobForm.title, jobForm.description); setJobForm(prev => ({ ...prev, scorecardSchema: schema })); } catch(e) { alert("Errore AI Scorecard."); } finally { setIsGeneratingScorecard(false); } };
 
     // --- TEMPLATE MANAGEMENT LOGIC ---
     const handleOpenSaveTemplate = () => { if (!jobForm.scorecardSchema?.categories.length) { alert("La scheda è vuota. Aggiungi categorie prima di salvare."); return; } setTemplateName(''); setIsSaveTemplateModalOpen(true); };
@@ -304,44 +260,11 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const handleTemplateDeleteItem = (catId: string, itemId: string) => { setEditingTemplate(prev => prev ? { ...prev, schema: { categories: prev.schema.categories.map(c => c.id === catId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c) } } : null); };
     const handleTemplateUpdateItem = (catId: string, itemId: string, label: string) => { setEditingTemplate(prev => prev ? { ...prev, schema: { categories: prev.schema.categories.map(c => c.id === catId ? { ...c, items: c.items.map(i => i.id === itemId ? { ...i, label } : i) } : c) } } : null); };
 
-    const handleAddStandardSchema = async () => {
-        if (!selectedJobId) return;
-        const job = data.jobs.find(j => j.id === selectedJobId);
-        if (!job) return;
-
-        const defaultSchema: ScorecardSchema = {
-             categories: [
-                { id: generateId(), name: 'Competenze Tecniche', items: [{id: generateId(), label: 'Hard Skills'}, {id: generateId(), label: 'Esperienza Rilevante'}] },
-                { id: generateId(), name: 'Soft Skills', items: [{id: generateId(), label: 'Comunicazione'}, {id: generateId(), label: 'Teamwork & Adattabilità'}] },
-                { id: generateId(), name: 'Culture Fit', items: [{id: generateId(), label: 'Valori & Mission'}, {id: generateId(), label: 'Motivazione & Crescita'}] }
-             ]
-        };
-        await updateJob({ ...job, scorecardSchema: defaultSchema });
-        refreshData();
-    };
 
     // ... (Standard handlers kept same)
-    const handleBatchAddToPipeline = async () => { if (!selectedJobId || selectedAssociateIds.size === 0) return; setIsAssociating(true); try { const job = data.jobs.find(j => j.id === selectedJobId); if (!job) return; const promises = Array.from(selectedAssociateIds).map(async (candidateId: string) => { const candidate = data.candidates.find(c => c.id === candidateId); let aiScore: number | undefined; let aiReasoning: string | undefined; if (candidate) { try { const fit = await evaluateFit(candidate, job, data.companyInfo); aiScore = fit.score; aiReasoning = fit.reasoning; } catch (e) { console.error(e); } } const app: Application = { id: generateId(), candidateId, jobId: selectedJobId, status: SelectionStatus.TO_ANALYZE, aiScore, aiReasoning, updatedAt: Date.now() }; return createApplication(app); }); await Promise.all(promises); refreshData(); setIsAssociateModalOpen(false); setSelectedAssociateIds(new Set()); } catch(e) { console.error(e); } finally { setIsAssociating(false); } };
+    const handleBatchAddToPipeline = async () => { if (!selectedJobId || selectedAssociateIds.size === 0) return; setIsAssociating(true); try { const job = data.jobs.find(j => j.id === selectedJobId); if (!job) return; const promises = Array.from(selectedAssociateIds).map(async (candidateId: string) => { const candidate = data.candidates.find(c => c.id === candidateId); let aiScore: number | undefined; let aiReasoning: string | undefined; if (candidate) { try { const fit = await evaluateFit(candidate, job); aiScore = fit.score; aiReasoning = fit.reasoning; } catch (e) { console.error(e); } } const app: Application = { id: generateId(), candidateId, jobId: selectedJobId, status: SelectionStatus.TO_ANALYZE, aiScore, aiReasoning, updatedAt: Date.now() }; return createApplication(app); }); await Promise.all(promises); refreshData(); setIsAssociateModalOpen(false); setSelectedAssociateIds(new Set()); } catch(e) { console.error(e); } finally { setIsAssociating(false); } };
     const toggleCandidateSelection = (candidateId: string) => { const newSet = new Set(selectedAssociateIds); if (newSet.has(candidateId)) { newSet.delete(candidateId); } else { newSet.add(candidateId); } setSelectedAssociateIds(newSet); };
-    
-    // AI EVALUATE SINGLE
-    const handleEvaluate = async (appId: string, candidateId: string) => { 
-        if (!selectedJobId) return; 
-        const job = data.jobs.find(j => j.id === selectedJobId); 
-        const candidate = data.candidates.find(c => c.id === candidateId); 
-        if (!job || !candidate) return; 
-        setEvaluatingId(appId); 
-        try { 
-            const result = await evaluateFit(candidate, job, data.companyInfo); 
-            updateApplicationAiScore(appId, result.score, result.reasoning); 
-            refreshData(); 
-        } catch (e) { 
-            alert("Errore valutazione AI: " + e); 
-        } finally { 
-            setEvaluatingId(null); 
-        } 
-    };
-
+    const handleEvaluate = async (appId: string, candidateId: string) => { if (!selectedJobId) return; const job = data.jobs.find(j => j.id === selectedJobId); const candidate = data.candidates.find(c => c.id === candidateId); if (!job || !candidate) return; setEvaluatingId(appId); try { const result = await evaluateFit(candidate, job); updateApplicationAiScore(appId, result.score, result.reasoning); refreshData(); } catch (e) { alert("Errore valutazione AI: " + e); } finally { setEvaluatingId(null); } };
     const handleDragStart = (e: React.DragEvent, appId: string) => { setDraggedAppId(appId); e.dataTransfer.effectAllowed = 'move'; };
     const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
     const handleDrop = (e: React.DragEvent, status: SelectionStatus) => { e.preventDefault(); if (draggedAppId) { if (status === SelectionStatus.REJECTED) { setPendingRejection({ appId: draggedAppId, status }); } else { updateApplicationStatus(draggedAppId, status); refreshData(); } setDraggedAppId(null); } };
@@ -578,17 +501,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 {currentUser?.role === UserRole.TEAM && isAssigned && (<div className="absolute top-6 right-6 text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full font-bold flex items-center gap-1 border border-indigo-100"><Shield size={10}/> ASSEGNATO</div>)}
                                 <div className="flex justify-between items-start mb-2 pr-20"><h3 className="text-xl font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{job.title}</h3><span className={`text-xs px-2 py-1 rounded-full font-medium ${job.status === 'OPEN' ? 'bg-green-100 text-green-800' : job.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'}`}>{job.status}</span></div>
                                 <p className="text-gray-500 text-sm mb-4">{job.department}</p>
-                                <div className="mt-auto flex justify-between items-center text-sm pt-4 border-t border-gray-50"><div className="flex gap-4 text-xs"><span className="font-bold text-gray-700">{activeCount} <span className="text-gray-400 font-normal">Attivi</span></span><span className="font-bold text-green-700">{hiredCount} <span className="text-gray-400 font-normal">Assunti</span></span><span className="font-bold text-red-700">{rejectedCount} <span className="text-gray-400 font-normal">Scartati</span></span></div>
-                                    <div className="flex gap-2">
-                                        {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
-                                            <>
-                                                <button onClick={(e) => { e.stopPropagation(); openEditJobModal(job); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16}/></button>
-                                                <button onClick={(e) => handleDeleteJob(e, job.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                                            </>
-                                        )}
-                                        <span className="flex items-center gap-1 text-indigo-600 font-medium">Gestisci <ChevronRight size={16} /></span>
-                                    </div>
-                                </div>
+                                <div className="mt-auto flex justify-between items-center text-sm pt-4 border-t border-gray-50"><div className="flex gap-4 text-xs"><span className="font-bold text-gray-700">{activeCount} <span className="text-gray-400 font-normal">Attivi</span></span><span className="font-bold text-green-700">{hiredCount} <span className="text-gray-400 font-normal">Assunti</span></span><span className="font-bold text-red-700">{rejectedCount} <span className="text-gray-400 font-normal">Scartati</span></span></div><div className="flex gap-2">{(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (<button onClick={(e) => { e.stopPropagation(); openEditJobModal(job); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16}/></button>)}<span className="flex items-center gap-1 text-indigo-600 font-medium">Gestisci <ChevronRight size={16} /></span></div></div>
                             </div>
                         );
                     })}
@@ -596,7 +509,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 
                 {/* JOB MODAL */}
                 {isJobModalOpen && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
                          <div className="bg-white rounded-xl p-6 w-full max-w-4xl m-4 shadow-2xl max-h-[90vh] overflow-y-auto">
                              <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-900">{editingJobId ? 'Modifica Posizione' : 'Nuova Posizione'}</h3><button onClick={() => setIsJobModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button></div>
                             <form onSubmit={handleSaveJob} className="space-y-6">
@@ -659,9 +572,9 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     </div>
                 )}
 
-                {/* ... Keep Template Manager Modals Same ... */}
+                {/* TEMPLATE MANAGER MODAL */}
                 {isTemplateManagerOpen && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
                         <div className="bg-white rounded-xl p-6 w-full max-w-3xl m-4 shadow-2xl max-h-[80vh] flex flex-col">
                             <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                                 <div className="flex items-center gap-3">
@@ -698,7 +611,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
                 {/* TEMPLATE EDITOR MODAL */}
                 {isTemplateEditorOpen && editingTemplate && (
-                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] backdrop-blur-sm">
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] backdrop-blur-sm">
                         <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] m-4 shadow-2xl flex flex-col">
                             <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                                 <input 
@@ -740,7 +653,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
                 {/* SAVE TEMPLATE MODAL */}
                 {isSaveTemplateModalOpen && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] backdrop-blur-sm">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm">
                         <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
                             <h3 className="text-lg font-bold mb-4">Salva come Modello</h3>
                             <input value={templateName} onChange={e => setTemplateName(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg mb-4 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Nome del modello (es. Standard Sales)..." autoFocus />
@@ -754,7 +667,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
                 {/* LOAD TEMPLATE MODAL */}
                 {isLoadTemplateModalOpen && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] backdrop-blur-sm">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm">
                         <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl max-h-[80vh] flex flex-col">
                             <div className="flex justify-between mb-4">
                                 <h3 className="text-lg font-bold">Carica Modello</h3>
@@ -874,10 +787,9 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 )}
             </div>
 
-            {/* ... (Keep existing modals: QuickView, Email, Rejection, Associate) ... */}
             {/* QUICK VIEW OVERLAY */}
             {viewingApp && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-[100] backdrop-blur-[2px]" onClick={() => setViewingApp(null)}>
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-50 backdrop-blur-[2px]" onClick={() => setViewingApp(null)}>
                     <div className={`bg-white h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 ${isCvPreviewOpen ? 'w-[95vw] max-w-7xl' : 'w-full max-w-3xl'}`} onClick={e => e.stopPropagation()}>
                         <div className="flex flex-1 overflow-hidden h-full">
                             {/* LEFT DETAILS */}
@@ -954,16 +866,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     {quickViewTab === 'scorecard' && (
                                         <div className="space-y-6">
                                             {!selectedJob?.scorecardSchema ? (
-                                                <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl flex flex-col items-center justify-center gap-4">
-                                                    <ListChecks size={32} className="opacity-50"/>
-                                                    <p>Nessuna scheda di valutazione configurata per questa posizione.</p>
-                                                    <button 
-                                                        onClick={handleAddStandardSchema}
-                                                        className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors border border-indigo-200"
-                                                    >
-                                                        Aggiungi Scheda Standard
-                                                    </button>
-                                                </div>
+                                                <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl"><ListChecks size={32} className="mx-auto mb-2 opacity-50"/>Nessuna scheda di valutazione configurata per questa posizione.</div>
                                             ) : (
                                                 <>
                                                     <div className="flex justify-between items-end bg-indigo-50 p-4 rounded-xl border border-indigo-100">
@@ -1054,7 +957,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
             {/* EMAIL MODAL */}
             {isEmailModalOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] backdrop-blur-sm">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] backdrop-blur-sm">
                     <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl">
                         <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4"><h3 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Mail size={24} className="text-indigo-600"/> Invia Email</h3><button onClick={() => setIsEmailModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button></div>
                         <div className="grid grid-cols-3 gap-6 h-[400px]">
@@ -1077,7 +980,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
             {/* REJECTION REASON MODAL */}
             {pendingRejection && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] backdrop-blur-sm">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm">
                     <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl border border-red-100">
                         <div className="flex items-center gap-3 mb-4 text-red-600"><AlertTriangle size={28} /><h3 className="text-lg font-bold text-gray-900">Conferma Scarto</h3></div>
                         <p className="text-sm text-gray-500 mb-4">Indica il motivo per cui stai scartando questo candidato.</p>
@@ -1095,7 +998,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
             {/* ASSOCIATE MODAL */}
             {isAssociateModalOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
                     <div className="bg-white rounded-xl p-6 w-full max-w-2xl m-4 shadow-2xl max-h-[80vh] flex flex-col">
                         <div className="flex justify-between items-center mb-4 shrink-0"><h3 className="text-xl font-bold text-gray-900">Associa Candidato</h3><button onClick={() => setIsAssociateModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button></div>
                         <div className="flex gap-2 mb-4 shrink-0"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="Cerca nel database..." className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" value={associateSearch} onChange={(e) => setAssociateSearch(e.target.value)} /></div></div>
@@ -1197,14 +1100,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                     {matrixCandidates.map(app => {
                                                         const c = data.candidates.find(cand => cand.id === app.candidateId);
                                                         return (
-                                                            <th 
-                                                                key={app.id} 
-                                                                className="p-4 border-l border-gray-100 truncate cursor-pointer hover:bg-gray-100 transition-colors" 
-                                                                title="Clicca per vedere dettagli"
-                                                                onClick={() => c && openQuickView(app, c)}
-                                                            >
-                                                                <div className="font-bold text-indigo-700 hover:underline">{c?.fullName}</div>
-                                                                <div className="text-xs font-normal text-gray-500 mt-0.5">{c?.age ? `${c.age} anni` : '-'}</div>
+                                                            <th key={app.id} className="p-4 font-bold text-gray-900 text-center border-l border-gray-100 truncate" title={c?.fullName}>
+                                                                {c?.fullName}
                                                                 <div className="text-[10px] text-gray-400 font-normal mt-1 uppercase">{StatusLabels[app.status]}</div>
                                                             </th>
                                                         );
@@ -1252,7 +1149,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
             {/* PHOTO ZOOM */}
             {isPhotoZoomed && viewingApp?.candidate.photo && (
-                <div className="fixed inset-0 bg-black/90 z-[120] flex items-center justify-center cursor-zoom-out animate-in fade-in duration-200" onClick={() => setIsPhotoZoomed(false)}>
+                <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center cursor-zoom-out animate-in fade-in duration-200" onClick={() => setIsPhotoZoomed(false)}>
                     <img src={`data:image/jpeg;base64,${viewingApp.candidate.photo}`} className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Full size"/>
                     <button className="absolute top-4 right-4 text-white/70 hover:text-white"><X size={32}/></button>
                 </div>

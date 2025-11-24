@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { OnboardingTask, OnboardingPhase, OnboardingPhaseLabels, Candidate, JobPosition, OnboardingTemplate, User, CompanyInfo } from '../types';
 import { generateOnboardingChecklist } from '../services/ai';
@@ -214,7 +215,7 @@ export const OnboardingSetupModal: React.FC<OnboardingSetupModalProps> = ({ isOp
                                     value={newTemplateName} 
                                     onChange={e => setNewTemplateName(e.target.value)} 
                                     placeholder="Nome modello..." 
-                                    className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none w-40"
+                                    className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none w-40 text-gray-900"
                                     autoFocus
                                 />
                                 <button onClick={handleSaveTemplate} className="bg-indigo-600 text-white p-1 rounded hover:bg-indigo-700"><CheckCircle size={16}/></button>

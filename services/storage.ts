@@ -1,5 +1,6 @@
 
-import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo } from '../types';
+
+import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus } from '../types';
 import { db, auth } from './firebase';
 import { 
   collection, 
@@ -14,8 +15,12 @@ import {
   writeBatch,
   arrayUnion,
   where,
-  deleteDoc
+  deleteDoc,
+  arrayRemove
 } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
+import { getStoredFirebaseConfig } from './firebase';
 
 const STORAGE_KEY = 'talentflow_data_v1';
 const TEMPLATES_KEY = 'talentflow_scorecard_templates';
@@ -39,7 +44,6 @@ export const generateId = (): string => {
 };
 
 // --- SANITIZATION HELPER FOR FIRESTORE ---
-// Firestore throws error on 'undefined', this converts them to null or removes them
 const sanitizeForFirestore = (obj: any): any => {
     if (obj === undefined) return null;
     if (obj === null) return null;
@@ -85,7 +89,6 @@ const saveLocalData = (data: AppState) => {
 
 export const updateCompanyInfo = async (info: CompanyInfo) => {
     if (db) {
-        // Store in a dedicated document settings/company
         await setDoc(doc(db, 'settings', 'company'), sanitizeForFirestore(info));
     } else {
         localStorage.setItem(COMPANY_INFO_KEY, JSON.stringify(info));
@@ -108,18 +111,14 @@ export const getCompanyInfo = async (): Promise<CompanyInfo | undefined> => {
 
 export const syncUserProfile = async (authUser: User): Promise<User> => {
     if (!db || !authUser.uid) return authUser;
-
     const userRef = doc(db, 'users', authUser.uid);
     try {
         const userSnap = await getDoc(userRef);
-        
         if (userSnap.exists()) {
             return { ...authUser, ...(userSnap.data() as any) } as User;
         } else {
             const userColl = collection(db, 'users');
             const snapshot = await getDocs(userColl);
-            
-            // FIRST USER BECOMES ADMIN
             const newUserProfile: User = {
                 ...authUser,
                 role: snapshot.empty ? UserRole.ADMIN : UserRole.TEAM 
@@ -153,8 +152,39 @@ export const updateUserRole = async (uid: string, newRole: UserRole) => {
 export const deleteUser = async (uid: string) => {
     if (!db) return;
     const userRef = doc(db, 'users', uid);
-    // Soft delete to keep references valid but prevent future assignment
     await updateDoc(userRef, { isDeleted: true });
+};
+
+// ADMIN CREATE USER (Uses a secondary app to avoid logging out current admin)
+export const adminCreateUser = async (user: User, password: string): Promise<void> => {
+    if (!db) throw new Error("Database not connected");
+    const config = getStoredFirebaseConfig();
+    if (!config) throw new Error("Config not found");
+
+    // Initialize secondary app
+    let secondaryApp;
+    const appName = "SecondaryApp-" + Date.now();
+    try {
+        secondaryApp = initializeApp(config, appName);
+        const secondaryAuth = getAuth(secondaryApp);
+
+        const userCred = await createUserWithEmailAndPassword(secondaryAuth, user.email, password);
+        await updateProfile(userCred.user, { displayName: user.name });
+        
+        // Save to Firestore (using MAIN app db)
+        await setDoc(doc(db, 'users', userCred.user.uid), sanitizeForFirestore({
+            ...user,
+            uid: userCred.user.uid,
+            avatar: `https://ui-avatars.com/api/?name=${user.name}&background=random`,
+            isDeleted: false
+        }));
+
+        // Sign out from secondary app
+        await signOut(secondaryAuth);
+    } catch (e: any) {
+        console.error("Error creating user:", e);
+        throw e;
+    }
 };
 
 // --- SCORECARD TEMPLATES ---
@@ -217,17 +247,12 @@ export const deleteScorecardTemplate = async (id: string) => {
 };
 
 // --- DATA SUBSCRIPTION (REALTIME) ---
-
 export const subscribeToData = (user: User | null, callback: (data: AppState) => void, onError?: (err: any) => void): (() => void) => {
   if (db) {
     const qCandidates = query(collection(db, 'candidates'));
     
-    let qJobs;
-    if (user && user.role === UserRole.TEAM && user.uid) {
-        qJobs = query(collection(db, 'jobs'), where('assignedTeamMembers', 'array-contains', user.uid));
-    } else {
-        qJobs = query(collection(db, 'jobs'));
-    }
+    // Allow seeing all jobs for now to enable metrics, filtering is done in UI
+    const qJobs = query(collection(db, 'jobs'));
 
     const qApps = query(collection(db, 'applications'));
     const qOnboarding = query(collection(db, 'onboarding'));
@@ -282,12 +307,7 @@ let cachedState: AppState = { ...defaultState };
 const refreshFullStateFromFirebase = async (user: User | null, callback: (data: AppState) => void) => {
     if (!db) return;
     try {
-        let qJobs;
-        if (user && user.role === UserRole.TEAM && user.uid) {
-            qJobs = query(collection(db, 'jobs'), where('assignedTeamMembers', 'array-contains', user.uid));
-        } else {
-            qJobs = query(collection(db, 'jobs'));
-        }
+        const qJobs = query(collection(db, 'jobs'));
 
         const [cSnap, jSnap, aSnap, oSnap, companySnap] = await Promise.all([
             getDocs(collection(db, 'candidates')),
@@ -312,7 +332,6 @@ const refreshFullStateFromFirebase = async (user: User | null, callback: (data: 
 };
 
 // --- BACKUP & RESTORE ---
-
 export const getFullDatabase = async (): Promise<AppState> => {
     if (db) {
         const [cSnap, jSnap, aSnap, oSnap, compSnap] = await Promise.all([
@@ -338,7 +357,6 @@ export const restoreDatabase = async (backupData: AppState) => {
     if (!backupData.candidates || !backupData.jobs || !backupData.applications) {
         throw new Error("Il file selezionato non è un backup valido di TalentFlow.");
     }
-
     if (db) {
         const allItems = [
             ...backupData.candidates.map(c => ({ type: 'candidates', data: c })),
@@ -346,7 +364,6 @@ export const restoreDatabase = async (backupData: AppState) => {
             ...backupData.applications.map(a => ({ type: 'applications', data: a })),
             ...(backupData.onboarding || []).map(o => ({ type: 'onboarding', data: o }))
         ];
-
         const chunkSize = 450;
         for (let i = 0; i < allItems.length; i += chunkSize) {
             const chunk = allItems.slice(i, i + chunkSize);
@@ -357,11 +374,9 @@ export const restoreDatabase = async (backupData: AppState) => {
             });
             await batch.commit();
         }
-
         if (backupData.companyInfo) {
             await setDoc(doc(db, 'settings', 'company'), sanitizeForFirestore(backupData.companyInfo));
         }
-
     } else {
         saveLocalData(backupData);
         window.dispatchEvent(new Event('talentflow-local-update'));
@@ -400,13 +415,11 @@ export const deleteCandidate = async (candidateId: string) => {
         const batch = writeBatch(db);
         const candidateRef = doc(db, 'candidates', candidateId);
         batch.update(candidateRef, { isDeleted: true });
-
         const q = query(collection(db, 'applications'), where('candidateId', '==', candidateId));
         const appsSnap = await getDocs(q);
         appsSnap.forEach((doc) => {
             batch.update(doc.ref, { isDeleted: true });
         });
-
         await batch.commit();
     } else {
         const data = getLocalData();
@@ -433,6 +446,44 @@ export const addCandidateComment = async (candidateId: string, comment: Comment)
         if (candidate) {
             if (!candidate.comments) candidate.comments = [];
             candidate.comments.push(comment);
+            saveLocalData(data);
+            window.dispatchEvent(new Event('talentflow-local-update'));
+        }
+    }
+};
+
+export const addCandidateAttachment = async (candidateId: string, attachment: Attachment) => {
+    if(db) {
+        await updateDoc(doc(db, 'candidates', candidateId), {
+            attachments: arrayUnion(sanitizeForFirestore(attachment))
+        });
+    } else {
+        const data = getLocalData();
+        const candidate = data.candidates.find(c => c.id === candidateId);
+        if(candidate) {
+            if(!candidate.attachments) candidate.attachments = [];
+            candidate.attachments.push(attachment);
+            saveLocalData(data);
+            window.dispatchEvent(new Event('talentflow-local-update'));
+        }
+    }
+};
+
+export const deleteCandidateAttachment = async (candidateId: string, attachmentId: string) => {
+    if (db) {
+        const candRef = doc(db, 'candidates', candidateId);
+        const snap = await getDoc(candRef);
+        if (snap.exists()) {
+            const data = snap.data();
+            // Filter out the attachment instead of using arrayRemove (which relies on object equality)
+            const updatedAttachments = (data.attachments || []).filter((a: any) => a.id !== attachmentId);
+            await updateDoc(candRef, { attachments: updatedAttachments });
+        }
+    } else {
+        const data = getLocalData();
+        const candidate = data.candidates.find(c => c.id === candidateId);
+        if(candidate && candidate.attachments) {
+            candidate.attachments = candidate.attachments.filter(a => a.id !== attachmentId);
             saveLocalData(data);
             window.dispatchEvent(new Event('talentflow-local-update'));
         }
@@ -489,12 +540,7 @@ export const createApplication = async (app: Application) => {
   }
 };
 
-export const updateApplicationStatus = async (
-    appId: string, 
-    status: SelectionStatus, 
-    rejectionReason?: string, 
-    rejectionNotes?: string
-) => {
+export const updateApplicationStatus = async (appId: string, status: SelectionStatus, rejectionReason?: string, rejectionNotes?: string) => {
   const updateData: any = { status, updatedAt: Date.now() };
   if (rejectionReason) updateData.rejectionReason = rejectionReason;
   if (rejectionNotes) updateData.rejectionNotes = rejectionNotes;
@@ -573,10 +619,23 @@ export const createOnboardingProcess = async (process: OnboardingProcess) => {
     }
 };
 
+export const updateOnboardingStatus = async (processId: string, status: OnboardingStatus) => {
+    if (db) {
+        await updateDoc(doc(db, 'onboarding', processId), { status });
+    } else {
+        const data = getLocalData();
+        const p = data.onboarding.find(o => o.id === processId);
+        if (p) {
+            p.status = status;
+            saveLocalData(data);
+            window.dispatchEvent(new Event('talentflow-local-update'));
+        }
+    }
+};
+
 export const updateOnboardingTask = async (processId: string, tasks: OnboardingTask[], isCompleted: boolean) => {
     const updateData: any = { tasks };
     if (isCompleted) updateData.status = 'COMPLETED';
-
     if (db) {
         await updateDoc(doc(db, 'onboarding', processId), sanitizeForFirestore(updateData));
     } else {
@@ -589,6 +648,43 @@ export const updateOnboardingTask = async (processId: string, tasks: OnboardingT
             window.dispatchEvent(new Event('talentflow-local-update'));
         }
     }
+};
+
+export const addOnboardingComment = async (processId: string, comment: Comment) => {
+    if (db) {
+        await updateDoc(doc(db, 'onboarding', processId), {
+            comments: arrayUnion(sanitizeForFirestore(comment))
+        });
+    } else {
+        const data = getLocalData();
+        const p = data.onboarding.find(o => o.id === processId);
+        if (p) {
+            if(!p.comments) p.comments = [];
+            p.comments.push(comment);
+            saveLocalData(data);
+            window.dispatchEvent(new Event('talentflow-local-update'));
+        }
+    }
+};
+
+export const addTaskComment = async (processId: string, taskId: string, comment: Comment, tasks: OnboardingTask[]) => {
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, comments: [...(t.comments || []), comment] } : t);
+    await updateOnboardingTask(processId, updatedTasks, false); // Status not auto-changed by comment
+};
+
+export const addTaskAttachment = async (processId: string, taskId: string, attachment: Attachment, tasks: OnboardingTask[]) => {
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, attachments: [...(t.attachments || []), attachment] } : t);
+    await updateOnboardingTask(processId, updatedTasks, false);
+};
+
+export const deleteTaskAttachment = async (processId: string, taskId: string, attachmentId: string, tasks: OnboardingTask[]) => {
+    const updatedTasks = tasks.map(t => {
+        if(t.id === taskId && t.attachments) {
+            return { ...t, attachments: t.attachments.filter(a => a.id !== attachmentId) };
+        }
+        return t;
+    });
+    await updateOnboardingTask(processId, updatedTasks, false);
 };
 
 export const deleteOnboardingProcess = async (id: string) => {
