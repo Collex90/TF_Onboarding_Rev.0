@@ -48,7 +48,7 @@ const PdfPage: React.FC<{ pdf: any, pageNumber: number, scale: number }> = ({ pd
 
 const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> = ({ base64, mimeType, url }) => {
     const [pdfDoc, setPdfDoc] = useState<any>(null);
-    const [scale, setScale] = useState(0.6);
+    const [scale, setScale] = useState(0.8);
     const [numPages, setNumPages] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -59,13 +59,25 @@ const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> 
         const loadPdf = async () => {
             if (!mimeType.includes('pdf')) return;
             setLoading(true);
+            setError(null);
+            
             try {
                 const pdfjs = (window as any).pdfjsLib;
-                if (!pdfjs) throw new Error("PDF Lib not found");
+                if (!pdfjs) throw new Error("Libreria PDF non caricata. Ricarica la pagina.");
                 
-                let pdf;
+                let pdfData;
+
                 if (url) {
-                    pdf = await pdfjs.getDocument(url).promise;
+                    // Fetch blob manually to avoid CORS issues or PDF.js fetch errors
+                    try {
+                        const resp = await fetch(url);
+                        if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
+                        const buffer = await resp.arrayBuffer();
+                        pdfData = { data: new Uint8Array(buffer) };
+                    } catch (fetchErr: any) {
+                        console.error("Fetch failed", fetchErr);
+                        throw new Error("Errore scaricamento file: " + fetchErr.message);
+                    }
                 } else if (base64) {
                     const binaryString = window.atob(base64);
                     const len = binaryString.length;
@@ -73,16 +85,17 @@ const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> 
                     for (let i = 0; i < len; i++) {
                         bytes[i] = binaryString.charCodeAt(i);
                     }
-                    pdf = await pdfjs.getDocument({ data: bytes }).promise;
+                    pdfData = { data: bytes };
                 } else {
-                     throw new Error("No source");
+                     throw new Error("Nessuna sorgente file.");
                 }
                 
+                const pdf = await pdfjs.getDocument(pdfData).promise;
                 setPdfDoc(pdf);
                 setNumPages(pdf.numPages);
             } catch (e: any) {
-                console.error(e);
-                setError("Impossibile visualizzare l'anteprima PDF.");
+                console.error("PDF Load Error:", e);
+                setError(e.message || "Impossibile visualizzare l'anteprima PDF.");
             } finally {
                 setLoading(false);
             }
@@ -106,12 +119,19 @@ const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> 
 
     return (
         <div className="w-full h-full relative bg-gray-200 flex flex-col overflow-hidden">
-            <div ref={containerRef} className="flex-1 overflow-auto flex relative custom-scrollbar">
+            <div ref={containerRef} className="flex-1 overflow-auto flex relative custom-scrollbar bg-gray-500/10">
                 <div className="m-auto p-8 min-w-min min-h-min">
-                    {loading && <div className="text-gray-500 flex items-center gap-2 mb-4 justify-center"><Loader2 className="animate-spin"/> Caricamento...</div>}
-                    {error && <div className="text-red-500 bg-white p-4 rounded shadow">{error}</div>}
+                    {loading && <div className="text-gray-500 flex items-center gap-2 mb-4 justify-center bg-white p-4 rounded shadow"><Loader2 className="animate-spin"/> Caricamento Documento...</div>}
+                    {error && (
+                        <div className="text-red-500 bg-white p-6 rounded-lg shadow-lg text-center max-w-md">
+                            <AlertTriangle size={32} className="mx-auto mb-2 opacity-80"/>
+                            <p className="font-bold mb-1">Errore Anteprima</p>
+                            <p className="text-sm">{error}</p>
+                            {url && <a href={url} target="_blank" rel="noreferrer" className="mt-4 inline-block text-indigo-600 underline text-sm">Scarica file originale</a>}
+                        </div>
+                    )}
                     
-                    {!mimeType.includes('pdf') ? (
+                    {!loading && !error && !mimeType.includes('pdf') && (
                         <img 
                             src={url || `data:${mimeType};base64,${base64}`} 
                             className="shadow-lg rounded bg-white transition-all duration-75 ease-linear block" 
@@ -119,15 +139,21 @@ const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> 
                             onLoad={(e) => setImgDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} 
                             alt="Preview" 
                         />
-                    ) : (
-                        pdfDoc && (<div className="flex flex-col items-center">{Array.from(new Array(numPages), (el, index) => (<PdfPage key={index} pdf={pdfDoc} pageNumber={index + 1} scale={scale} />))}</div>)
+                    )}
+                    
+                    {!loading && !error && mimeType.includes('pdf') && pdfDoc && (
+                        <div className="flex flex-col items-center gap-4">
+                            {Array.from(new Array(numPages), (el, index) => (
+                                <PdfPage key={index} pdf={pdfDoc} pageNumber={index + 1} scale={scale} />
+                            ))}
+                        </div>
                     )}
                 </div>
             </div>
-            <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur shadow-xl border border-gray-200 rounded-full px-4 py-2 flex items-center gap-4 z-50">
-                <button onClick={() => setScale(s => Math.max(0.2, s - 0.1))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-700" title="Zoom Out"><ZoomOut size={20} /></button>
-                <span className="text-xs font-bold w-12 text-center text-gray-800">{Math.round(scale * 100)}%</span>
-                <button onClick={() => setScale(s => Math.min(4.0, s + 0.1))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-700" title="Zoom In"><ZoomIn size={20} /></button>
+            <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900/80 backdrop-blur shadow-xl border border-white/10 rounded-full px-4 py-2 flex items-center gap-4 z-50 text-white">
+                <button onClick={() => setScale(s => Math.max(0.2, s - 0.1))} className="p-1.5 hover:bg-white/20 rounded-full transition-colors" title="Zoom Out"><ZoomOut size={20} /></button>
+                <span className="text-xs font-bold w-12 text-center">{Math.round(scale * 100)}%</span>
+                <button onClick={() => setScale(s => Math.min(4.0, s + 0.1))} className="p-1.5 hover:bg-white/20 rounded-full transition-colors" title="Zoom In"><ZoomIn size={20} /></button>
             </div>
         </div>
     );

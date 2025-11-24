@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
 import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image } from 'lucide-react';
@@ -596,7 +593,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 </div>
                 
                 {/* ... Job Modals (create/edit/template manager) ... */}
-                {/* Kept existing modal code for brevity, assumes it's there as in previous file content */}
                 {isJobModalOpen && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
                          <div className="bg-white rounded-xl p-6 w-full max-w-4xl m-4 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -659,7 +655,79 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                          </div>
                     </div>
                 )}
-                {/* ... Template Manager & Editor Modals (assumed present) ... */}
+                
+                {/* TEMPLATE MANAGER MODALS */}
+                {isSaveTemplateModalOpen && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+                            <h3 className="font-bold text-gray-900 mb-4">Salva come Modello</h3>
+                            <input autoFocus value={templateName} onChange={e => setTemplateName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 mb-4 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Nome del modello..." />
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => setIsSaveTemplateModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Annulla</button>
+                                <button onClick={handleConfirmSaveTemplate} disabled={!templateName} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Salva</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isLoadTemplateModalOpen && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+                            <h3 className="font-bold text-gray-900 mb-4">Carica Modello</h3>
+                            <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+                                {templates.length === 0 ? <p className="text-gray-400 text-center py-4">Nessun modello salvato.</p> : templates.map(t => (
+                                    <div key={t.id} onClick={() => handleLoadTemplate(t)} className="p-3 border border-gray-200 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 cursor-pointer transition-colors group">
+                                        <div className="font-medium text-gray-800">{t.name}</div>
+                                        <div className="text-xs text-gray-500">{t.schema.categories.length} categorie</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={() => setIsLoadTemplateModalOpen(false)} className="w-full py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">Chiudi</button>
+                        </div>
+                    </div>
+                )}
+
+                {/* TEMPLATE LIBRARY MANAGER */}
+                {isTemplateManagerOpen && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+                            <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-900 flex items-center gap-2"><ListChecks size={20} className="text-indigo-600"/> Libreria Modelli</h3><button onClick={() => setIsTemplateManagerOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button></div>
+                            <div className="flex justify-end mb-4"><button onClick={openNewTemplate} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center gap-2"><Plus size={16}/> Nuovo Modello</button></div>
+                            <div className="flex-1 overflow-y-auto space-y-3 p-1">
+                                {templates.length === 0 ? <p className="text-center text-gray-400 py-10">Nessun modello trovato.</p> : templates.map(t => (
+                                    <div key={t.id} className="flex justify-between items-center p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm">
+                                        <div><h4 className="font-bold text-gray-900">{t.name}</h4><p className="text-xs text-gray-500">{t.schema.categories.length} categorie, {t.schema.categories.reduce((acc, c) => acc + c.items.length, 0)} criteri</p></div>
+                                        <div className="flex gap-2"><button onClick={() => openEditTemplate(t)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Edit size={16}/></button><button onClick={() => handleDeleteTemplate(t.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button></div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isTemplateEditorOpen && editingTemplate && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+                            <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-900">Editor Modello</h3><button onClick={() => setIsTemplateEditorOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button></div>
+                            <div className="mb-4"><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Modello</label><input value={editingTemplate.name} onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})} className="w-full p-2 border border-gray-300 rounded font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"/></div>
+                            <div className="flex-1 overflow-y-auto space-y-4 p-1">
+                                {editingTemplate.schema.categories.map(cat => (
+                                    <div key={cat.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                        <div className="flex justify-between items-center mb-2"><input value={cat.name} onChange={(e) => handleTemplateUpdateCategory(cat.id, e.target.value)} className="font-bold text-gray-800 bg-transparent border-b border-transparent focus:border-indigo-500 outline-none w-1/2"/><button onClick={() => handleTemplateDeleteCategory(cat.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button></div>
+                                        <div className="space-y-2 pl-2">
+                                            {cat.items.map(item => (
+                                                <div key={item.id} className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-400 rounded-full"></div><input value={item.label} onChange={(e) => handleTemplateUpdateItem(cat.id, item.id, e.target.value)} className="flex-1 text-sm bg-white border border-gray-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500"/><button onClick={() => handleTemplateDeleteItem(cat.id, item.id)} className="text-gray-300 hover:text-red-500"><X size={12}/></button></div>
+                                            ))}
+                                            <button onClick={() => handleTemplateAddItem(cat.id)} className="text-xs text-indigo-600 hover:underline mt-2">+ Aggiungi Voce</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <button onClick={handleTemplateAddCategory} className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 text-sm hover:border-indigo-400 hover:text-indigo-600">+ Aggiungi Categoria</button>
+                            </div>
+                            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-100"><button onClick={() => setIsTemplateEditorOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Annulla</button><button onClick={saveEditedTemplate} className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Salva Modello</button></div>
+                        </div>
+                    </div>
+                )}
 
                 {/* DELETE JOB CONFIRMATION MODAL */}
                 {jobToDeleteId && (
