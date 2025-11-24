@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Candidate, JobPosition, Application, User, Comment, StatusLabels, StatusColors, CandidateStatus, CandidateStatusLabels, CandidateStatusColors } from '../types';
 import { Plus, Upload, FileText, Sparkles, X, Users, Search, Pencil, UploadCloud, AlertTriangle, CheckCircle, Loader2, Trash2, Download, MessageSquare, Clock, Briefcase, Send, Building, Banknote, Eye, Maximize2, Minimize2, ZoomIn, ZoomOut, Phone, Mail, LayoutGrid, List, ChevronUp, ChevronDown, CheckSquare, Square, Star } from 'lucide-react';
@@ -252,8 +253,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                     valB = applications.filter(app => app.candidateId === b.id).length;
                 }
                 else if (typeof valA === 'string' && typeof valB === 'string') {
-                    valA = (valA as string).toLowerCase();
-                    valB = (valB as string).toLowerCase();
+                    valA = valA.toLowerCase();
+                    valB = valB.toLowerCase();
                 } else {
                     // Fallback for mixed types or non-string
                     valA = valA || 0;
@@ -317,7 +318,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         if (deleteCandidateIds.size === 0) return;
         setIsDeleting(true);
         try {
-            const promises = Array.from(deleteCandidateIds).map((id: string) => deleteCandidate(id));
+            const promises = Array.from(deleteCandidateIds).map(id => deleteCandidate(id));
             await Promise.all(promises);
             refreshData();
             setViewingCandidate(null);
@@ -335,7 +336,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     const handleBulkStatusChange = async (status: CandidateStatus) => {
         if (selectedIds.size === 0) return;
         try {
-            const promises = Array.from(selectedIds).map((id: string) => {
+            const promises = Array.from(selectedIds).map(id => {
                 const candidate = candidates.find(c => c.id === id);
                 if (candidate) {
                     return updateCandidate({ ...candidate, status });

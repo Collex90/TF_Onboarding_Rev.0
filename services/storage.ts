@@ -665,6 +665,29 @@ export const seedDatabase = async (assignToUserId?: string) => {
         }
     ];
 
+    const defaultScorecard: ScorecardSchema = {
+        categories: [
+            {
+                id: 'cat_tech', name: 'Competenze Tecniche', items: [
+                    { id: 'tech_1', label: 'Conoscenza Strumenti', description: 'Valuta la padronanza degli strumenti richiesti per il ruolo.' },
+                    { id: 'tech_2', label: 'Problem Solving', description: 'Capacità di risolvere problemi complessi in autonomia.' }
+                ]
+            },
+            {
+                id: 'cat_soft', name: 'Soft Skills', items: [
+                    { id: 'soft_1', label: 'Comunicazione', description: 'Chiarezza nell\'esposizione e capacità di sintesi.' },
+                    { id: 'soft_2', label: 'Team Work', description: 'Attitudine al lavoro di squadra e alla collaborazione.' }
+                ]
+            },
+            {
+                id: 'cat_culture', name: 'Culture Fit', items: [
+                    { id: 'cult_1', label: 'Valori Aziendali', description: 'Allineamento con la mission e i valori dell\'azienda.' },
+                    { id: 'cult_2', label: 'Motivazione', description: 'Interesse genuino per la posizione e l\'azienda.' }
+                ]
+            }
+        ]
+    };
+
     // 3 JOBS
     const mockJobs: JobPosition[] = [
         {
@@ -675,7 +698,8 @@ export const seedDatabase = async (assignToUserId?: string) => {
             requirements: '5+ anni di esperienza, ottima conoscenza di React e TypeScript.',
             status: 'OPEN',
             assignedTeamMembers: targetUserId ? [targetUserId] : [],
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            scorecardSchema: defaultScorecard
         },
         {
             id: 'j2',
@@ -686,25 +710,7 @@ export const seedDatabase = async (assignToUserId?: string) => {
             status: 'OPEN',
             assignedTeamMembers: targetUserId ? [targetUserId] : [],
             createdAt: Date.now(),
-            // Pre-configured Scorecard for Testing
-            scorecardSchema: {
-                categories: [
-                    {
-                        id: 'cat_soft', name: 'Soft Skills', items: [
-                            { id: 'soft_1', label: 'Comunicazione Efficace' },
-                            { id: 'soft_2', label: 'Empatia' },
-                            { id: 'soft_3', label: 'Gestione Stress' }
-                        ]
-                    },
-                    {
-                        id: 'cat_sales', name: 'Competenze Vendita', items: [
-                            { id: 'sales_1', label: 'Tecniche di Negoziazione' },
-                            { id: 'sales_2', label: 'Closing' },
-                            { id: 'sales_3', label: 'Gestione Obiezioni' }
-                        ]
-                    }
-                ]
-            }
+            scorecardSchema: defaultScorecard
         },
         {
             id: 'j3',
@@ -714,7 +720,8 @@ export const seedDatabase = async (assignToUserId?: string) => {
             requirements: 'Esperienza pregressa in aziende SaaS B2B.',
             status: 'OPEN',
             assignedTeamMembers: targetUserId ? [targetUserId] : [],
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            scorecardSchema: defaultScorecard
         }
     ];
 
@@ -742,7 +749,7 @@ export const seedDatabase = async (assignToUserId?: string) => {
             updatedAt: Date.now()
         },
 
-        // Applications for J2 (Sales) - With Scorecard Data
+        // Applications for J2 (Sales)
         {
             id: 'a4',
             candidateId: 'c4', // Francesca
