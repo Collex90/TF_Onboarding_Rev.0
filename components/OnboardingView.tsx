@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppState, OnboardingProcess, OnboardingTask, User, OnboardingPhase, OnboardingPhaseLabels, OnboardingStatus, OnboardingStatusLabels, OnboardingStatusColors, UserRole, Comment, Attachment } from '../types';
-import { CheckCircle, Circle, Clock, Trash2, Search, Flag, Plus, Sparkles, Loader2, X, User as UserIcon, Calendar, ChevronRight, Filter, MessageSquare, Paperclip, FileText, Download, Send, Table, Image, GripVertical } from 'lucide-react';
+import { CheckCircle, Circle, Clock, Trash2, Search, Flag, Plus, Sparkles, Loader2, X, User as UserIcon, Calendar, ChevronRight, Filter, MessageSquare, Paperclip, FileText, Download, Send, Table, Image, GripVertical, AlertCircle } from 'lucide-react';
 import { updateOnboardingTask, deleteOnboardingProcess, generateId, createOnboardingProcess, getAllUsers, updateOnboardingStatus, addOnboardingComment, addTaskComment, addTaskAttachment, deleteTaskAttachment } from '../services/storage';
 import { generateOnboardingChecklist } from '../services/ai';
 import { OnboardingSetupModal } from './OnboardingSetupModal';
@@ -93,6 +93,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
     }, [data.onboarding, data.candidates, data.jobs, searchTerm, statusFilter, currentUser]);
 
     const selectedProcess = processes.find(p => p.id === selectedProcessId);
+    // Allow null candidate/job to handle "Orphaned" processes
     const selectedCandidate = selectedProcess ? data.candidates.find(c => c.id === selectedProcess.candidateId) : null;
     const selectedJob = selectedProcess ? data.jobs.find(j => j.id === selectedProcess.jobId) : null;
 
@@ -268,6 +269,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                             const c = data.candidates.find(x => x.id === process.candidateId);
                             const j = data.jobs.find(x => x.id === process.jobId);
                             const progress = getProgress(process);
+                            const isOrphan = !c || !j;
                             
                             return (
                                 <div 
@@ -276,12 +278,12 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                     className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${selectedProcessId === process.id ? 'bg-indigo-50 border-indigo-200' : ''}`}
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <h4 className="font-bold text-sm text-gray-900 truncate">{c?.fullName || 'Sconosciuto'}</h4>
+                                        <h4 className={`font-bold text-sm truncate ${isOrphan ? 'text-red-500' : 'text-gray-900'}`}>{c?.fullName || 'Sconosciuto (Dati Mancanti)'}</h4>
                                         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${OnboardingStatusColors[process.status]}`}>
                                             {OnboardingStatusLabels[process.status]}
                                         </span>
                                     </div>
-                                    <p className="text-xs text-gray-500 mb-2 truncate">{j?.title || 'Posizione'}</p>
+                                    <p className="text-xs text-gray-500 mb-2 truncate">{j?.title || 'Posizione Sconosciuta'}</p>
                                     
                                     <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden mb-2">
                                         <div className="bg-indigo-600 h-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
@@ -299,20 +301,22 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
 
             {/* MAIN CONTENT */}
             <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
-                {selectedProcess && selectedCandidate && selectedJob ? (
+                {selectedProcess ? (
                     <>
                         {/* HEADER */}
                         <div className="bg-white border-b border-gray-200 p-6 flex justify-between items-start shrink-0">
                             <div>
-                                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                                    {selectedCandidate.fullName}
-                                    <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">
-                                        {selectedJob.title}
-                                    </span>
+                                <h2 className={`text-2xl font-bold flex items-center gap-3 ${!selectedCandidate ? 'text-red-600' : 'text-gray-900'}`}>
+                                    {selectedCandidate ? selectedCandidate.fullName : <span className="flex items-center gap-2"><AlertCircle size={24}/> Candidato Eliminato</span>}
+                                    {selectedJob && (
+                                        <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">
+                                            {selectedJob.title}
+                                        </span>
+                                    )}
                                 </h2>
                                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
                                     <span className="flex items-center gap-1"><Calendar size={14}/> Inizio: {new Date(selectedProcess.startDate).toLocaleDateString()}</span>
-                                    <span className="flex items-center gap-1"><UserIcon size={14}/> {selectedCandidate.email}</span>
+                                    {selectedCandidate?.email && <span className="flex items-center gap-1"><UserIcon size={14}/> {selectedCandidate.email}</span>}
                                     <select 
                                         value={selectedProcess.status}
                                         onChange={(e) => handleStatusChange(e.target.value)}
@@ -329,6 +333,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                     <button 
                                         onClick={() => handleDeleteProcess(selectedProcess.id)} 
                                         className="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                        title="Elimina Processo"
                                     >
                                         <Trash2 size={20}/>
                                     </button>
