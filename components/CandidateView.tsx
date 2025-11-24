@@ -76,7 +76,8 @@ const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> 
                         pdfData = { data: new Uint8Array(buffer) };
                     } catch (fetchErr: any) {
                         console.error("Fetch failed", fetchErr);
-                        throw new Error("Errore scaricamento file: " + fetchErr.message);
+                        // Specific error for CORS/Network to show Download button
+                        throw new Error("CORS_ERROR");
                     }
                 } else if (base64) {
                     const binaryString = window.atob(base64);
@@ -95,7 +96,11 @@ const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> 
                 setNumPages(pdf.numPages);
             } catch (e: any) {
                 console.error("PDF Load Error:", e);
-                setError(e.message || "Impossibile visualizzare l'anteprima PDF.");
+                if (e.message === "CORS_ERROR") {
+                    setError("Anteprima non disponibile per file remoti protetti.");
+                } else {
+                    setError(e.message || "Impossibile visualizzare l'anteprima PDF.");
+                }
             } finally {
                 setLoading(false);
             }
@@ -120,14 +125,25 @@ const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> 
     return (
         <div className="w-full h-full relative bg-gray-200 flex flex-col overflow-hidden">
             <div ref={containerRef} className="flex-1 overflow-auto flex relative custom-scrollbar bg-gray-500/10">
-                <div className="m-auto p-8 min-w-min min-h-min">
+                <div className="m-auto p-8 min-w-min min-h-min flex flex-col items-center justify-center h-full">
                     {loading && <div className="text-gray-500 flex items-center gap-2 mb-4 justify-center bg-white p-4 rounded shadow"><Loader2 className="animate-spin"/> Caricamento Documento...</div>}
+                    
                     {error && (
-                        <div className="text-red-500 bg-white p-6 rounded-lg shadow-lg text-center max-w-md">
-                            <AlertTriangle size={32} className="mx-auto mb-2 opacity-80"/>
-                            <p className="font-bold mb-1">Errore Anteprima</p>
-                            <p className="text-sm">{error}</p>
-                            {url && <a href={url} target="_blank" rel="noreferrer" className="mt-4 inline-block text-indigo-600 underline text-sm">Scarica file originale</a>}
+                        <div className="text-gray-600 bg-white p-8 rounded-xl shadow-lg text-center max-w-md flex flex-col items-center">
+                            <FileText size={48} className="text-indigo-200 mb-4"/>
+                            <p className="font-bold mb-2 text-lg">Anteprima non disponibile</p>
+                            <p className="text-sm text-gray-500 mb-6">{error === "Anteprima non disponibile per file remoti protetti." ? "Il browser ha bloccato l'anteprima diretta del file remoto per sicurezza (CORS)." : error}</p>
+                            
+                            {url && (
+                                <a 
+                                    href={url} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2"
+                                >
+                                    <Download size={18}/> Scarica File Originale
+                                </a>
+                            )}
                         </div>
                     )}
                     
@@ -150,11 +166,13 @@ const PdfPreview: React.FC<{ base64?: string; mimeType: string; url?: string }> 
                     )}
                 </div>
             </div>
-            <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900/80 backdrop-blur shadow-xl border border-white/10 rounded-full px-4 py-2 flex items-center gap-4 z-50 text-white">
-                <button onClick={() => setScale(s => Math.max(0.2, s - 0.1))} className="p-1.5 hover:bg-white/20 rounded-full transition-colors" title="Zoom Out"><ZoomOut size={20} /></button>
-                <span className="text-xs font-bold w-12 text-center">{Math.round(scale * 100)}%</span>
-                <button onClick={() => setScale(s => Math.min(4.0, s + 0.1))} className="p-1.5 hover:bg-white/20 rounded-full transition-colors" title="Zoom In"><ZoomIn size={20} /></button>
-            </div>
+            {!error && !loading && (
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900/80 backdrop-blur shadow-xl border border-white/10 rounded-full px-4 py-2 flex items-center gap-4 z-50 text-white">
+                    <button onClick={() => setScale(s => Math.max(0.2, s - 0.1))} className="p-1.5 hover:bg-white/20 rounded-full transition-colors" title="Zoom Out"><ZoomOut size={20} /></button>
+                    <span className="text-xs font-bold w-12 text-center">{Math.round(scale * 100)}%</span>
+                    <button onClick={() => setScale(s => Math.min(4.0, s + 0.1))} className="p-1.5 hover:bg-white/20 rounded-full transition-colors" title="Zoom In"><ZoomIn size={20} /></button>
+                </div>
+            )}
         </div>
     );
 };
@@ -227,6 +245,28 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         fullName: '', email: '', phone: '', age: undefined, skills: [], summary: '',
         currentCompany: '', currentRole: '', currentSalary: '', benefits: [], status: CandidateStatus.CANDIDATE
     });
+
+    // Helper: Determine Associated Job safely for Onboarding Modal
+    const associatedJob = useMemo(() => {
+        if (!viewingCandidate) return null;
+        const job = jobs.find(j => applications.some(a => a.candidateId === viewingCandidate.id && a.jobId === j.id));
+        
+        // Fallback Job Object to prevent crash if job is missing
+        if (!job) {
+             // If jobs array has items, use the first one, otherwise create a dummy
+             return jobs.length > 0 ? jobs[0] : { 
+                 id: 'unknown_job', 
+                 title: 'Posizione Non Specificata', 
+                 department: 'Generale', 
+                 description: '', 
+                 requirements: '', 
+                 status: 'OPEN', 
+                 createdAt: Date.now() 
+             } as JobPosition;
+        }
+        return job;
+    }, [viewingCandidate, jobs, applications]);
+
 
     useEffect(() => {
         if (!viewingCandidate) {
@@ -1070,12 +1110,12 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             )}
 
             {/* ONBOARDING SETUP MODAL TRIGGERED FROM QUICK VIEW */}
-            {isOnboardingSetupOpen && viewingCandidate && (
+            {isOnboardingSetupOpen && viewingCandidate && associatedJob && (
                 <OnboardingSetupModal 
                     isOpen={isOnboardingSetupOpen}
                     onClose={() => setIsOnboardingSetupOpen(false)}
                     candidate={viewingCandidate}
-                    job={jobs.find(j => applications.some(a => a.candidateId === viewingCandidate.id && a.jobId === j.id)) || jobs[0]} // Simplistic fallback for job
+                    job={associatedJob}
                     onProcessCreated={() => { setIsOnboardingSetupOpen(false); refreshData(); }}
                 />
             )}
