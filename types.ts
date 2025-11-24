@@ -59,6 +59,7 @@ export interface User {
     email: string;
     role: UserRole | string; // Supports enum or string
     avatar?: string;
+    isDeleted?: boolean; // Soft delete flag
 }
 
 export interface Comment {

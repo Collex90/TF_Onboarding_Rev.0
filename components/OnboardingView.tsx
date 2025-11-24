@@ -28,6 +28,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
         getAllUsers().then(setAllUsers);
     }, []);
 
+    const activeUsers = useMemo(() => allUsers.filter(u => !u.isDeleted), [allUsers]);
+
     const processes = useMemo(() => {
         let list = data.onboarding;
         if (searchTerm) {
@@ -290,7 +292,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                                             <div className="w-6 h-6 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-[10px] font-bold text-indigo-700 overflow-hidden">
                                                                                 {assignee.avatar ? <img src={assignee.avatar} className="w-full h-full object-cover"/> : (assignee.name || 'U').charAt(0)}
                                                                             </div>
-                                                                            <span className="text-xs text-gray-600 max-w-[80px] truncate hidden sm:block">{assignee.name}</span>
+                                                                            <span className={`text-xs max-w-[80px] truncate hidden sm:block ${assignee.isDeleted ? 'line-through text-gray-400' : 'text-gray-600'}`}>{assignee.name}</span>
                                                                         </>
                                                                     ) : (
                                                                         <div className="flex items-center gap-1 text-gray-400">
@@ -306,7 +308,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                                 <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-lg z-20 hidden group-hover:block max-h-48 overflow-y-auto custom-scrollbar">
                                                                     <div className="p-2">
                                                                         <div className="text-[10px] font-bold text-gray-400 uppercase mb-2 px-2">Seleziona Responsabile</div>
-                                                                        {allUsers.map(u => (
+                                                                        {activeUsers.map(u => (
                                                                             <div 
                                                                                 key={u.uid} 
                                                                                 onClick={() => handleAssignTask(task.id, u.uid || '')}

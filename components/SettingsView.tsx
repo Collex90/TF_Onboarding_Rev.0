@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users } from 'lucide-react';
-import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole } from '../services/storage';
+import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, deleteUser } from '../services/storage';
 import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig } from '../services/firebase';
 import { AppState, User, UserRole } from '../types';
 
@@ -55,6 +55,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         await updateUserRole(uid, newRole);
         // Optimistic update
         setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
+    };
+
+    const handleDeleteUser = async (uid: string) => {
+        if(confirm("Sei sicuro di voler eliminare questo utente? Non potrà più accedere, ma lo storico rimarrà visibile.")) {
+            await deleteUser(uid);
+            setUsers(users.map(u => u.uid === uid ? { ...u, isDeleted: true } : u));
+        }
     };
 
     const parseFirebaseConfig = (input: string): any => {
@@ -206,33 +213,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
                                     <tr>
                                         <th className="p-3 rounded-l-lg">Utente</th>
                                         <th className="p-3">Email</th>
-                                        <th className="p-3 rounded-r-lg">Ruolo</th>
+                                        <th className="p-3">Ruolo</th>
+                                        <th className="p-3 rounded-r-lg w-20"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoadingUsers ? (
-                                        <tr><td colSpan={3} className="p-4 text-center"><Loader2 className="animate-spin inline"/> Caricamento...</td></tr>
+                                        <tr><td colSpan={4} className="p-4 text-center"><Loader2 className="animate-spin inline"/> Caricamento...</td></tr>
                                     ) : users.map(u => (
-                                        <tr key={u.uid || u.email}>
+                                        <tr key={u.uid || u.email} className={u.isDeleted ? "opacity-50 bg-gray-50" : ""}>
                                             <td className="p-3 font-medium flex items-center gap-2">
                                                 <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-indigo-600 font-bold text-xs border border-gray-200">
                                                     {u.avatar ? <img src={u.avatar} className="w-full h-full rounded-full"/> : (u.name || 'U').charAt(0)}
                                                 </div>
-                                                {u.name || 'Utente Sconosciuto'}
-                                                {u.uid === currentUser.uid && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">TU</span>}
+                                                <div>
+                                                    <div className={u.isDeleted ? "line-through text-gray-500" : "text-gray-900"}>
+                                                        {u.name || 'Utente Sconosciuto'}
+                                                        {u.uid === currentUser.uid && <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">TU</span>}
+                                                    </div>
+                                                    {u.isDeleted && <div className="text-[10px] text-red-500 font-bold">ELIMINATO</div>}
+                                                </div>
                                             </td>
                                             <td className="p-3 text-gray-600">{u.email}</td>
                                             <td className="p-3">
                                                 <select 
                                                     value={u.role} 
                                                     onChange={(e) => u.uid && handleRoleChange(u.uid, e.target.value as UserRole)}
-                                                    className="bg-white border border-gray-200 rounded px-2 py-1 text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                    disabled={u.uid === currentUser.uid} // Can't change own role
+                                                    className="bg-white border border-gray-200 rounded px-2 py-1 text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
+                                                    disabled={u.uid === currentUser.uid || !!u.isDeleted}
                                                 >
                                                     <option value={UserRole.TEAM}>TEAM</option>
                                                     <option value={UserRole.HR}>HR</option>
                                                     <option value={UserRole.ADMIN}>ADMIN</option>
                                                 </select>
+                                            </td>
+                                            <td className="p-3 text-right">
+                                                {u.uid !== currentUser.uid && !u.isDeleted && (
+                                                    <button 
+                                                        onClick={() => u.uid && handleDeleteUser(u.uid)}
+                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="Elimina Utente"
+                                                    >
+                                                        <Trash2 size={16}/>
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}

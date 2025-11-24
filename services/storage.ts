@@ -1,3 +1,4 @@
+
 import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate } from '../types';
 import { db, auth } from './firebase';
 import { 
@@ -35,6 +36,27 @@ export const generateId = (): string => {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
 
+// --- SANITIZATION HELPER FOR FIRESTORE ---
+// Firestore throws error on 'undefined', this converts them to null or removes them
+const sanitizeForFirestore = (obj: any): any => {
+    if (obj === undefined) return null;
+    if (obj === null) return null;
+    if (Array.isArray(obj)) {
+        return obj.map(v => sanitizeForFirestore(v));
+    }
+    if (typeof obj === 'object') {
+        const newObj: any = {};
+        Object.keys(obj).forEach(key => {
+            const val = obj[key];
+            if (val !== undefined) {
+                newObj[key] = sanitizeForFirestore(val);
+            }
+        });
+        return newObj;
+    }
+    return obj;
+};
+
 // --- LOCAL STORAGE HELPERS ---
 const getLocalData = (): AppState => {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -66,7 +88,7 @@ export const syncUserProfile = async (authUser: User): Promise<User> => {
                 ...authUser,
                 role: snapshot.empty ? UserRole.ADMIN : UserRole.TEAM 
             };
-            await setDoc(userRef, newUserProfile);
+            await setDoc(userRef, sanitizeForFirestore(newUserProfile));
             return newUserProfile;
         }
     } catch (e) {
@@ -92,6 +114,13 @@ export const updateUserRole = async (uid: string, newRole: UserRole) => {
     await updateDoc(userRef, { role: newRole });
 };
 
+export const deleteUser = async (uid: string) => {
+    if (!db) return;
+    const userRef = doc(db, 'users', uid);
+    // Soft delete to keep references valid but prevent future assignment
+    await updateDoc(userRef, { isDeleted: true });
+};
+
 // --- SCORECARD TEMPLATES ---
 
 export const saveScorecardTemplate = async (name: string, schema: ScorecardSchema) => {
@@ -103,7 +132,7 @@ export const saveScorecardTemplate = async (name: string, schema: ScorecardSchem
     };
 
     if (db) {
-        await setDoc(doc(db, 'scorecardTemplates', template.id), template);
+        await setDoc(doc(db, 'scorecardTemplates', template.id), sanitizeForFirestore(template));
     } else {
         const stored = localStorage.getItem(TEMPLATES_KEY);
         const templates: ScorecardTemplate[] = stored ? JSON.parse(stored) : [];
@@ -114,7 +143,7 @@ export const saveScorecardTemplate = async (name: string, schema: ScorecardSchem
 
 export const updateScorecardTemplate = async (template: ScorecardTemplate) => {
     if (db) {
-        await updateDoc(doc(db, 'scorecardTemplates', template.id), template as any);
+        await updateDoc(doc(db, 'scorecardTemplates', template.id), sanitizeForFirestore(template));
     } else {
         const stored = localStorage.getItem(TEMPLATES_KEY);
         if (stored) {
@@ -281,7 +310,7 @@ export const restoreDatabase = async (backupData: AppState) => {
             const batch = writeBatch(db);
             chunk.forEach(item => {
                 const ref = doc(db, item.type, item.data.id);
-                batch.set(ref, item.data);
+                batch.set(ref, sanitizeForFirestore(item.data));
             });
             await batch.commit();
         }
@@ -295,7 +324,7 @@ export const restoreDatabase = async (backupData: AppState) => {
 
 export const addCandidate = async (candidate: Candidate) => {
   if (db) {
-    await setDoc(doc(db, 'candidates', candidate.id), candidate);
+    await setDoc(doc(db, 'candidates', candidate.id), sanitizeForFirestore(candidate));
   } else {
     const data = getLocalData();
     data.candidates.push(candidate);
@@ -306,7 +335,7 @@ export const addCandidate = async (candidate: Candidate) => {
 
 export const updateCandidate = async (candidate: Candidate) => {
   if (db) {
-    await setDoc(doc(db, 'candidates', candidate.id), candidate, { merge: true });
+    await setDoc(doc(db, 'candidates', candidate.id), sanitizeForFirestore(candidate), { merge: true });
   } else {
     const data = getLocalData();
     const index = data.candidates.findIndex(c => c.id === candidate.id);
@@ -348,7 +377,7 @@ export const deleteCandidate = async (candidateId: string) => {
 export const addCandidateComment = async (candidateId: string, comment: Comment) => {
     if (db) {
         await updateDoc(doc(db, 'candidates', candidateId), {
-            comments: arrayUnion(comment)
+            comments: arrayUnion(sanitizeForFirestore(comment))
         });
     } else {
         const data = getLocalData();
@@ -364,7 +393,7 @@ export const addCandidateComment = async (candidateId: string, comment: Comment)
 
 export const addJob = async (job: JobPosition) => {
   if (db) {
-    await setDoc(doc(db, 'jobs', job.id), job);
+    await setDoc(doc(db, 'jobs', job.id), sanitizeForFirestore(job));
   } else {
     const data = getLocalData();
     data.jobs.push(job);
@@ -375,7 +404,7 @@ export const addJob = async (job: JobPosition) => {
 
 export const updateJob = async (job: JobPosition) => {
     if (db) {
-        await updateDoc(doc(db, 'jobs', job.id), job as any);
+        await updateDoc(doc(db, 'jobs', job.id), sanitizeForFirestore(job));
     } else {
         const data = getLocalData();
         const index = data.jobs.findIndex(j => j.id === job.id);
@@ -387,9 +416,20 @@ export const updateJob = async (job: JobPosition) => {
     }
 };
 
+export const deleteJob = async (jobId: string) => {
+    if (db) {
+        await deleteDoc(doc(db, 'jobs', jobId));
+    } else {
+        const data = getLocalData();
+        data.jobs = data.jobs.filter(j => j.id !== jobId);
+        saveLocalData(data);
+        window.dispatchEvent(new Event('talentflow-local-update'));
+    }
+};
+
 export const createApplication = async (app: Application) => {
   if (db) {
-    await setDoc(doc(db, 'applications', app.id), app);
+    await setDoc(doc(db, 'applications', app.id), sanitizeForFirestore(app));
   } else {
     const data = getLocalData();
     const exists = data.applications.some(a => a.candidateId === app.candidateId && a.jobId === app.jobId);
@@ -412,7 +452,7 @@ export const updateApplicationStatus = async (
   if (rejectionNotes) updateData.rejectionNotes = rejectionNotes;
 
   if (db) {
-    await updateDoc(doc(db, 'applications', appId), updateData);
+    await updateDoc(doc(db, 'applications', appId), sanitizeForFirestore(updateData));
   } else {
     const data = getLocalData();
     const app = data.applications.find(a => a.id === appId);
@@ -429,7 +469,7 @@ export const updateApplicationStatus = async (
 
 export const updateApplicationMetadata = async (appId: string, metadata: { rating?: number, priority?: 'LOW' | 'MEDIUM' | 'HIGH' }) => {
     if (db) {
-        await updateDoc(doc(db, 'applications', appId), metadata);
+        await updateDoc(doc(db, 'applications', appId), sanitizeForFirestore(metadata));
     } else {
         const data = getLocalData();
         const app = data.applications.find(a => a.id === appId);
@@ -475,7 +515,7 @@ export const updateApplicationScorecard = async (appId: string, results: Record<
 
 export const createOnboardingProcess = async (process: OnboardingProcess) => {
     if (db) {
-        await setDoc(doc(db, 'onboarding', process.id), process);
+        await setDoc(doc(db, 'onboarding', process.id), sanitizeForFirestore(process));
     } else {
         const data = getLocalData();
         if (!data.onboarding) data.onboarding = [];
@@ -490,7 +530,7 @@ export const updateOnboardingTask = async (processId: string, tasks: OnboardingT
     if (isCompleted) updateData.status = 'COMPLETED';
 
     if (db) {
-        await updateDoc(doc(db, 'onboarding', processId), updateData);
+        await updateDoc(doc(db, 'onboarding', processId), sanitizeForFirestore(updateData));
     } else {
         const data = getLocalData();
         const process = data.onboarding.find(p => p.id === processId);
@@ -518,7 +558,7 @@ export const deleteOnboardingProcess = async (id: string) => {
 
 export const saveOnboardingTemplate = async (template: OnboardingTemplate) => {
     if (db) {
-        await setDoc(doc(db, 'onboardingTemplates', template.id), template);
+        await setDoc(doc(db, 'onboardingTemplates', template.id), sanitizeForFirestore(template));
     } else {
         const stored = localStorage.getItem(ONBOARDING_TEMPLATES_KEY);
         const templates: OnboardingTemplate[] = stored ? JSON.parse(stored) : [];
@@ -804,9 +844,9 @@ export const seedDatabase = async (assignToUserId?: string) => {
     if (db) {
         try {
             const batch = writeBatch(db);
-            mockCandidates.forEach(c => batch.set(doc(db, 'candidates', c.id), c));
-            mockJobs.forEach(j => batch.set(doc(db, 'jobs', j.id), j));
-            mockApplications.forEach(a => batch.set(doc(db, 'applications', a.id), a));
+            mockCandidates.forEach(c => batch.set(doc(db, 'candidates', c.id), sanitizeForFirestore(c)));
+            mockJobs.forEach(j => batch.set(doc(db, 'jobs', j.id), sanitizeForFirestore(j)));
+            mockApplications.forEach(a => batch.set(doc(db, 'applications', a.id), sanitizeForFirestore(a)));
             await batch.commit();
             console.log("Seed completed successfully for user:", targetUserId);
         } catch (e: any) {

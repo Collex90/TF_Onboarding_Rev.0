@@ -32,7 +32,7 @@ export const OnboardingSetupModal: React.FC<OnboardingSetupModalProps> = ({ isOp
             setTasks([]); 
             setPhaseConfig(OnboardingPhaseLabels); // Reset to default
             loadTemplates();
-            getAllUsers().then(setAllUsers);
+            getAllUsers().then(users => setAllUsers(users.filter(u => !u.isDeleted)));
         }
     }, [isOpen]);
 
