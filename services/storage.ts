@@ -1,4 +1,3 @@
-
 import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate } from '../types';
 import { db, auth } from './firebase';
 import { 
@@ -57,7 +56,7 @@ export const syncUserProfile = async (authUser: User): Promise<User> => {
         const userSnap = await getDoc(userRef);
         
         if (userSnap.exists()) {
-            return { ...authUser, ...userSnap.data() } as User;
+            return { ...authUser, ...(userSnap.data() as any) } as User;
         } else {
             const userColl = collection(db, 'users');
             const snapshot = await getDocs(userColl);
@@ -230,10 +229,10 @@ const refreshFullStateFromFirebase = async (user: User | null, callback: (data: 
         ]);
 
         cachedState = {
-            candidates: cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Candidate)).filter(c => !c.isDeleted),
-            jobs: jSnap.docs.map(d => ({ id: d.id, ...d.data() } as JobPosition)),
-            applications: aSnap.docs.map(d => ({ id: d.id, ...d.data() } as Application)).filter(a => !a.isDeleted),
-            onboarding: oSnap.docs.map(d => ({ id: d.id, ...d.data() } as OnboardingProcess))
+            candidates: cSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Candidate)).filter(c => !c.isDeleted),
+            jobs: jSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as JobPosition)),
+            applications: aSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Application)).filter(a => !a.isDeleted),
+            onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess))
         };
         callback(cachedState);
     } catch (e) {
@@ -253,10 +252,10 @@ export const getFullDatabase = async (): Promise<AppState> => {
             getDocs(collection(db, 'onboarding'))
         ]);
         return {
-            candidates: cSnap.docs.map(d => ({ id: d.id, ...d.data() } as Candidate)),
-            jobs: jSnap.docs.map(d => ({ id: d.id, ...d.data() } as JobPosition)),
-            applications: aSnap.docs.map(d => ({ id: d.id, ...d.data() } as Application)),
-            onboarding: oSnap.docs.map(d => ({ id: d.id, ...d.data() } as OnboardingProcess))
+            candidates: cSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Candidate)),
+            jobs: jSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as JobPosition)),
+            applications: aSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Application)),
+            onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess))
         };
     } else {
         return getLocalData();

@@ -260,6 +260,21 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const handleTemplateDeleteItem = (catId: string, itemId: string) => { setEditingTemplate(prev => prev ? { ...prev, schema: { categories: prev.schema.categories.map(c => c.id === catId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c) } } : null); };
     const handleTemplateUpdateItem = (catId: string, itemId: string, label: string) => { setEditingTemplate(prev => prev ? { ...prev, schema: { categories: prev.schema.categories.map(c => c.id === catId ? { ...c, items: c.items.map(i => i.id === itemId ? { ...i, label } : i) } : c) } } : null); };
 
+    const handleAddStandardSchema = async () => {
+        if (!selectedJobId) return;
+        const job = data.jobs.find(j => j.id === selectedJobId);
+        if (!job) return;
+
+        const defaultSchema: ScorecardSchema = {
+             categories: [
+                { id: generateId(), name: 'Competenze Tecniche', items: [{id: generateId(), label: 'Hard Skills'}, {id: generateId(), label: 'Esperienza Rilevante'}] },
+                { id: generateId(), name: 'Soft Skills', items: [{id: generateId(), label: 'Comunicazione'}, {id: generateId(), label: 'Teamwork & Adattabilità'}] },
+                { id: generateId(), name: 'Culture Fit', items: [{id: generateId(), label: 'Valori & Mission'}, {id: generateId(), label: 'Motivazione & Crescita'}] }
+             ]
+        };
+        await updateJob({ ...job, scorecardSchema: defaultSchema });
+        refreshData();
+    };
 
     // ... (Standard handlers kept same)
     const handleBatchAddToPipeline = async () => { if (!selectedJobId || selectedAssociateIds.size === 0) return; setIsAssociating(true); try { const job = data.jobs.find(j => j.id === selectedJobId); if (!job) return; const promises = Array.from(selectedAssociateIds).map(async (candidateId: string) => { const candidate = data.candidates.find(c => c.id === candidateId); let aiScore: number | undefined; let aiReasoning: string | undefined; if (candidate) { try { const fit = await evaluateFit(candidate, job); aiScore = fit.score; aiReasoning = fit.reasoning; } catch (e) { console.error(e); } } const app: Application = { id: generateId(), candidateId, jobId: selectedJobId, status: SelectionStatus.TO_ANALYZE, aiScore, aiReasoning, updatedAt: Date.now() }; return createApplication(app); }); await Promise.all(promises); refreshData(); setIsAssociateModalOpen(false); setSelectedAssociateIds(new Set()); } catch(e) { console.error(e); } finally { setIsAssociating(false); } };
@@ -866,7 +881,16 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     {quickViewTab === 'scorecard' && (
                                         <div className="space-y-6">
                                             {!selectedJob?.scorecardSchema ? (
-                                                <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl"><ListChecks size={32} className="mx-auto mb-2 opacity-50"/>Nessuna scheda di valutazione configurata per questa posizione.</div>
+                                                <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl flex flex-col items-center justify-center gap-4">
+                                                    <ListChecks size={32} className="opacity-50"/>
+                                                    <p>Nessuna scheda di valutazione configurata per questa posizione.</p>
+                                                    <button 
+                                                        onClick={handleAddStandardSchema}
+                                                        className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors border border-indigo-200"
+                                                    >
+                                                        Aggiungi Scheda Standard
+                                                    </button>
+                                                </div>
                                             ) : (
                                                 <>
                                                     <div className="flex justify-between items-end bg-indigo-50 p-4 rounded-xl border border-indigo-100">
