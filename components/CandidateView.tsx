@@ -364,6 +364,12 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                     createdAt: Date.now()
                 };
                 await addCandidateAttachment(viewingCandidate.id, attachment);
+                
+                // UPDATE LOCAL STATE IMMEDIATELY FOR UI FEEDBACK
+                setViewingCandidate(prev => prev ? {
+                    ...prev,
+                    attachments: [...(prev.attachments || []), attachment]
+                } : null);
             };
             reader.readAsDataURL(file);
         }
@@ -918,7 +924,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                     {quickViewTab === 'comments' && (
                                         <div className="flex flex-col h-full">
                                             <div className="flex-1 space-y-4 mb-6">
-                                                {!viewingCandidate.comments || viewingCandidate.comments.length === 0 ? <p className="text-center text-gray-400 text-sm py-8 italic">Nessun commento.</p> : viewingCandidate.comments.map((comment) => (<div key={comment.id} className="bg-gray-50 p-3 rounded-xl rounded-tl-none border border-gray-100 ml-2"><div className="flex items-center justify-between mb-1"><span className="text-xs font-bold text-gray-900">{comment.authorName}</span><span className="text-[10px] text-gray-400 flex items-center gap-1"><Clock size={10}/> {new Date(comment.createdAt).toLocaleDateString()}</span></div><p className="text-sm text-gray-900">{comment.text}</p></div>))}
+                                                {!viewingCandidate.comments || viewingCandidate.comments.length === 0 ? <p className="text-center text-gray-400 text-sm py-8 italic">Nessun commento.</p> : viewingCandidate.comments.map((comment) => (<div key={comment.id} className="bg-gray-50 p-3 rounded-xl rounded-tl-none border border-gray-100 ml-2"><div className="flex items-center justify-between mb-1"><span className="text-xs font-bold text-gray-900">{comment.authorName}</span><span className="text-[10px] text-gray-400 flex items-center gap-1"><Clock size={10}/> {new Date(comment.createdAt).toLocaleDateString()}</span></div><p className="text-sm text-gray-900 whitespace-pre-wrap">{comment.text}</p></div>))}
                                             </div>
                                             <div className="relative mt-auto pt-4 border-t border-gray-100">
                                                 <textarea ref={commentInputRef} className="text-gray-900 w-full bg-white border border-gray-200 rounded-xl p-3 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none" rows={3} placeholder="Scrivi una nota... (Ctrl+Enter per inviare)" value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={handleCommentKeyDown} />
