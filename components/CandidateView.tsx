@@ -59,6 +59,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     const [quickViewTab, setQuickViewTab] = useState<'info' | 'processes' | 'comments' | 'attachments'>('info');
     const [newComment, setNewComment] = useState('');
     const commentInputRef = useRef<HTMLTextAreaElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
     
     const [isPhotoZoomed, setIsPhotoZoomed] = useState(false);
 
@@ -118,6 +119,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     useEffect(() => {
         if (!viewingCandidate) {
             setIsPhotoZoomed(false);
+            // Focus search when closing quick view or initially mounting
+            searchInputRef.current?.focus();
         }
     }, [viewingCandidate]);
 
@@ -262,7 +265,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             setSelectedIds(new Set());
         } catch (error: any) {
             console.error("Delete error:", error);
-            alert("Errore durante l'eliminazione: " + error.message);
+            alert("Errore durante l'eliminazione: " + (error?.message || String(error)));
         } finally {
             setIsDeleting(false);
         }
@@ -331,7 +334,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         try {
             const reader = new FileReader();
             reader.onload = async () => {
-                const res = reader.result as string;
+                const res = reader.result;
+                // Safe check to ensure we have a string result
+                if (typeof res !== 'string') {
+                     setError("Errore formato file");
+                     setIsLoading(false);
+                     return;
+                }
                 const base64String = res.split(',')[1] || '';
                 try {
                     const parsedData = await parseCV(base64String, file.type);
@@ -341,7 +350,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                         cvFileBase64: base64String,
                         cvMimeType: file.type
                     }));
-                } catch (err: any) { setError("Errore AI: " + err.message); } 
+                } catch (err: any) { setError("Errore AI: " + (err?.message || String(err))); } 
                 finally { setIsLoading(false); }
             };
             reader.readAsDataURL(file);
@@ -355,7 +364,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         for (const file of files) {
             const reader = new FileReader();
             reader.onload = async () => {
-                const res = reader.result as string;
+                const res = reader.result;
+                if (typeof res !== 'string') return;
                 const base64 = res.split(',')[1];
                 const attachment: Attachment = {
                     id: generateId(),
@@ -497,6 +507,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                         <input 
+                            ref={searchInputRef}
                             type="text" 
                             placeholder="Cerca per nome, skills, email..." 
                             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-full focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-shadow text-gray-900"

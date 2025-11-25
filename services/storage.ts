@@ -34,16 +34,10 @@ const defaultState: AppState = {
   companyInfo: { name: '', industry: '', description: '', productsServices: '' }
 };
 
-// Helper for ID generation - ROBUST FALLBACK
+// Helper for ID generation - ROBUST FALLBACK (Simplified for Demo Environment Compatibility)
 export const generateId = (): string => {
-    try {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            return crypto.randomUUID();
-        }
-    } catch (e) {
-        // Fallback if crypto.randomUUID fails (e.g. non-secure context)
-    }
-    return Date.now().toString(36) + Math.random().toString(36).substring(2);
+    // Use simple math random to ensure it works in all WebContainers/Environments without crypto issues
+    return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
 };
 
 // --- STORAGE HELPER ---

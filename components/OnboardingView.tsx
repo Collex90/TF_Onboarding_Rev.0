@@ -132,6 +132,11 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
         refreshData();
     };
 
+    const handleTaskDateChange = (taskId: string, dateString: string) => {
+        const timestamp = dateString ? new Date(dateString).getTime() : undefined;
+        handleTaskFieldUpdate(taskId, 'dueDate', timestamp);
+    };
+
     const handleDeleteProcess = async (id: string) => {
         if(confirm("Eliminare questo processo?")) {
             await deleteOnboardingProcess(id);
@@ -242,7 +247,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                             ref={searchInputRef}
                             type="text" 
                             placeholder="Cerca dipendente..." 
-                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -405,7 +410,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                                         {task.isCompleted ? <CheckCircle size={20}/> : <Circle size={20}/>}
                                                                     </button>
                                                                     <div className="flex-1 min-w-0">
-                                                                        <p className={`font-medium text-gray-900 ${task.isCompleted ? 'line-through text-gray-500' : ''}`}>{task.description}</p>
+                                                                        <p className={`font-medium text-gray-900 whitespace-pre-wrap ${task.isCompleted ? 'line-through text-gray-500' : ''}`}>{task.description}</p>
                                                                         <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
                                                                             <span className="bg-gray-100 px-2 py-0.5 rounded font-bold">{task.department}</span>
                                                                             {assignee && (
@@ -539,7 +544,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                             <input 
                                                 type="date"
                                                 value={viewingTask.dueDate ? new Date(viewingTask.dueDate).toISOString().split('T')[0] : ''}
-                                                onChange={(e) => handleTaskFieldUpdate(viewingTask.id, 'dueDate', e.target.value ? new Date(e.target.value).getTime() : undefined)}
+                                                onChange={(e) => handleTaskDateChange(viewingTask.id, e.target.value)}
                                                 className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
                                             />
                                         </div>
