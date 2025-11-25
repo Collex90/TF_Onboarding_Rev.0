@@ -470,11 +470,17 @@ export const getCloudBackups = async (): Promise<BackupMetadata[]> => {
     }
 };
 
+// NEW: Helper to get public URL if CORS fails for direct reading
+export const getBackupDownloadUrl = async (fullPath: string): Promise<string> => {
+    if (!storage) throw new Error("Storage not active");
+    const storageRef = ref(storage, fullPath);
+    return await getDownloadURL(storageRef);
+};
+
 export const restoreFromCloud = async (fullPath: string) => {
     if (!storage) throw new Error("Storage not active");
     const storageRef = ref(storage, fullPath);
 
-    // FIX CORS ISSUE: Use getBytes instead of fetch(url)
     try {
         const buffer = await getBytes(storageRef);
         // Decode ArrayBuffer to String
@@ -483,7 +489,11 @@ export const restoreFromCloud = async (fullPath: string) => {
         await restoreDatabase(jsonData);
     } catch (e: any) {
          console.error("Restore failed", e);
-         throw new Error("Impossibile scaricare il backup (Problema di Rete/CORS): " + e.message);
+         // SPECIFIC ERROR DETECTION FOR CORS / RETRY LIMIT
+         if (e.code === 'storage/retry-limit-exceeded' || e.message.includes('network') || e.message.includes('CORS')) {
+             throw new Error("CORS_BLOCK");
+         }
+         throw new Error("Impossibile scaricare il backup: " + e.message);
     }
 };
 

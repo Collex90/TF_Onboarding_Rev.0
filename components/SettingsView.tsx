@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, UploadCloud, Building2, ShieldCheck, FileText } from 'lucide-react';
-import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud, getCompanyInfo, updateCompanyInfo } from '../services/storage';
+import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud, getCompanyInfo, updateCompanyInfo, getBackupDownloadUrl } from '../services/storage';
 import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig } from '../services/firebase';
 import { AppState, User, UserRole, BackupMetadata, DeletedItem, CompanyInfo } from '../types';
 
@@ -244,7 +244,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
             setTimeout(() => setRestoreStatus('IDLE'), 3000);
         } catch (e: any) {
             console.error(e);
-            alert("Errore ripristino Cloud: " + e.message);
+            if (e.message === 'CORS_BLOCK') {
+                // FALLBACK STRATEGY: Download via browser and ask user to upload manually
+                try {
+                    const url = await getBackupDownloadUrl(path);
+                    window.open(url, '_blank');
+                    alert("⚠️ BLOCCO SICUREZZA BROWSER (CORS)\n\nIl browser ha impedito il ripristino diretto.\n\nIl file di backup è stato scaricato automaticamente sul tuo PC.\nUsa il pulsante 'Seleziona File' nella sezione 'Ripristina Dati' qui a fianco per caricarlo manualmente.");
+                } catch (urlErr) {
+                    alert("Errore nel recupero del link di download di emergenza.");
+                }
+            } else {
+                alert("Errore ripristino Cloud: " + e.message);
+            }
             setRestoreStatus('ERROR');
         }
     };
