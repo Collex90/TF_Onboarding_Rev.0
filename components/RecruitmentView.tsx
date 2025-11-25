@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
-import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image } from 'lucide-react';
+import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink } from 'lucide-react';
 import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, addCandidateAttachment, deleteCandidateAttachment, deleteJob } from '../services/storage';
 import { evaluateFit, generateJobDetails, generateScorecardSchema } from '../services/ai';
 
@@ -17,98 +17,6 @@ const getFileIcon = (mimeType: string) => {
     if (mimeType.includes('sheet') || mimeType.includes('excel')) return <Table size={16} className="text-green-600"/>;
     if (mimeType.includes('image')) return <Image size={16} className="text-purple-500"/>;
     return <FileText size={16} className="text-indigo-500"/>;
-};
-
-// ... (Keep existing PdfPage and PdfPreview components exactly as they are)
-const PdfPage: React.FC<{ pdf: any, pageNumber: number, scale: number }> = ({ pdf, pageNumber, scale }) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    useEffect(() => {
-        const renderPage = async () => {
-            const page = await pdf.getPage(pageNumber);
-            const viewport = page.getViewport({ scale });
-            const canvas = canvasRef.current;
-            if (canvas) {
-                const context = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-                await page.render({ canvasContext: context!, viewport: viewport }).promise;
-            }
-        };
-        renderPage();
-    }, [pdf, pageNumber, scale]);
-    return <canvas ref={canvasRef} className="shadow-md rounded bg-white mb-4 block" />;
-};
-
-const PdfPreview: React.FC<{ base64: string; mimeType: string }> = ({ base64, mimeType }) => {
-    const [pdfDoc, setPdfDoc] = useState<any>(null);
-    const [scale, setScale] = useState(0.6);
-    const [numPages, setNumPages] = useState(0);
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [imgDimensions, setImgDimensions] = useState({ width: 0, height: 0 });
-
-    useEffect(() => {
-        const loadPdf = async () => {
-            if (!mimeType.includes('pdf')) return;
-            setLoading(true);
-            try {
-                const binaryString = window.atob(base64);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                }
-                const pdfjs = (window as any).pdfjsLib;
-                if (!pdfjs) throw new Error("PDF Lib not found");
-                const pdf = await pdfjs.getDocument({ data: bytes }).promise;
-                setPdfDoc(pdf);
-                setNumPages(pdf.numPages);
-            } catch (e: any) {
-                console.error(e);
-                setError("Impossibile visualizzare l'anteprima PDF.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadPdf();
-    }, [base64, mimeType]);
-
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-        const handleWheel = (e: WheelEvent) => {
-            if (e.ctrlKey) {
-                e.preventDefault(); 
-                const delta = e.deltaY * -0.001;
-                setScale(prev => Math.min(Math.max(0.3, prev + delta), 4));
-            }
-        };
-        container.addEventListener('wheel', handleWheel, { passive: false });
-        return () => { container.removeEventListener('wheel', handleWheel); };
-    }, []);
-
-    return (
-        <div className="w-full h-full relative bg-gray-200 flex flex-col overflow-hidden">
-            <div ref={containerRef} className="flex-1 overflow-auto flex relative custom-scrollbar">
-                <div className="m-auto p-8 min-w-min min-h-min">
-                    {loading && <div className="text-gray-500 flex items-center gap-2 mb-4 justify-center"><Loader2 className="animate-spin"/> Caricamento...</div>}
-                    {error && <div className="text-red-500 bg-white p-4 rounded shadow">{error}</div>}
-                    
-                    {!mimeType.includes('pdf') ? (
-                        <img src={`data:${mimeType};base64,${base64}`} className="shadow-lg rounded bg-white transition-all duration-75 ease-linear block" style={{ width: imgDimensions.width ? `${imgDimensions.width * scale}px` : 'auto', maxWidth: 'none' }} onLoad={(e) => setImgDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} alt="Preview" />
-                    ) : (
-                        pdfDoc && (<div className="flex flex-col items-center">{Array.from(new Array(numPages), (el, index) => (<PdfPage key={index} pdf={pdfDoc} pageNumber={index + 1} scale={scale} />))}</div>)
-                    )}
-                </div>
-            </div>
-            <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur shadow-xl border border-gray-200 rounded-full px-4 py-2 flex items-center gap-4 z-50">
-                <button onClick={() => setScale(s => Math.max(0.2, s - 0.1))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-700" title="Zoom Out"><ZoomOut size={20} /></button>
-                <span className="text-xs font-bold w-12 text-center text-gray-800">{Math.round(scale * 100)}%</span>
-                <button onClick={() => setScale(s => Math.min(4.0, s + 0.1))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-700" title="Zoom In"><ZoomIn size={20} /></button>
-            </div>
-        </div>
-    );
 };
 
 export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshData, currentUser, onUpload }) => {
@@ -131,7 +39,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const [quickViewTab, setQuickViewTab] = useState<'info' | 'processes' | 'comments' | 'scorecard' | 'attachments'>('info');
     const [newComment, setNewComment] = useState('');
     const [isPhotoZoomed, setIsPhotoZoomed] = useState(false);
-    const [isCvPreviewOpen, setIsCvPreviewOpen] = useState(false);
 
     // DELETE JOB STATES
     const [jobToDeleteId, setJobToDeleteId] = useState<string | null>(null);
@@ -172,7 +79,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const attachmentInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (!viewingApp) { setIsCvPreviewOpen(false); setIsPhotoZoomed(false); }
+        if (!viewingApp) { setIsPhotoZoomed(false); }
     }, [viewingApp]);
 
     useEffect(() => {
@@ -364,7 +271,39 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const handleDrop = (e: React.DragEvent, status: SelectionStatus) => { e.preventDefault(); if (draggedAppId) { if (status === SelectionStatus.REJECTED) { setPendingRejection({ appId: draggedAppId, status }); } else { updateApplicationStatus(draggedAppId, status); refreshData(); } setDraggedAppId(null); } };
     const confirmRejection = () => { if (pendingRejection) { updateApplicationStatus(pendingRejection.appId, pendingRejection.status, rejectionReason, rejectionNotes); refreshData(); setPendingRejection(null); setRejectionReason('Soft Skill'); setRejectionNotes(''); if (viewingApp?.app.id === pendingRejection.appId) { setViewingApp(null); } } };
     const cancelRejection = () => { setPendingRejection(null); setRejectionReason('Soft Skill'); setRejectionNotes(''); };
-    const openQuickView = (app: Application, candidate: Candidate, openPreview = false) => { setViewingApp({ app, candidate }); setQuickViewTab('info'); setIsPhotoZoomed(false); setIsCvPreviewOpen(openPreview); };
+    
+    const openQuickView = (app: Application, candidate: Candidate) => { 
+        setViewingApp({ app, candidate }); 
+        setQuickViewTab('info'); 
+        setIsPhotoZoomed(false); 
+    };
+    
+    const handleOpenCV = () => {
+        if (!viewingApp) return;
+
+        if (viewingApp.candidate.cvUrl) {
+            window.open(viewingApp.candidate.cvUrl, '_blank');
+            return;
+        }
+
+        if (viewingApp.candidate.cvFileBase64 && viewingApp.candidate.cvMimeType) {
+            try {
+                const byteCharacters = atob(viewingApp.candidate.cvFileBase64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: viewingApp.candidate.cvMimeType });
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+            } catch (e) {
+                console.error("Error opening base64 CV:", e);
+                alert("Impossibile aprire il file locale.");
+            }
+        }
+    };
+
     const handleRatingChange = (rating: number) => { if (viewingApp) { updateApplicationMetadata(viewingApp.app.id, { rating }); setViewingApp(prev => prev ? { ...prev, app: { ...prev.app, rating } } : null); refreshData(); } };
     const handleInlineRatingChange = (appId: string, rating: number) => { updateApplicationMetadata(appId, { rating }); refreshData(); };
     const handleInlinePriorityChange = (appId: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') => { updateApplicationMetadata(appId, { priority }); refreshData(); };
@@ -900,7 +839,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                     </td>
                                                     <td className="p-4"><div className={`text-xs font-bold px-2 py-1 rounded inline-flex items-center gap-1 border ${(app.aiScore || 0) >= 80 ? 'bg-green-50 text-green-700 border-green-100' : (app.aiScore || 0) >= 50 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : 'bg-red-50 text-red-700 border-red-100'}`}><BrainCircuit size={12}/> {app.aiScore}%</div></td>
                                                     <td className="p-4 font-bold text-indigo-700">{totalScore > 0 ? `${totalScore}/${maxScore}` : '-'}</td>
-                                                    <td className="p-4"><button onClick={(e) => { e.stopPropagation(); openQuickView(app, candidate, true); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"><Eye size={18}/></button></td>
+                                                    <td className="p-4"><button onClick={(e) => { e.stopPropagation(); openQuickView(app, candidate); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"><Eye size={18}/></button></td>
                                                 </tr>
                                             );
                                         })}
@@ -915,10 +854,10 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
             {/* QUICK VIEW OVERLAY */}
             {viewingApp && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-50 backdrop-blur-[2px]" onClick={() => setViewingApp(null)}>
-                    <div className={`bg-white h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 ${isCvPreviewOpen ? 'w-[95vw] max-w-7xl' : 'w-full max-w-3xl'}`} onClick={e => e.stopPropagation()}>
+                    <div className="bg-white h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-3xl" onClick={e => e.stopPropagation()}>
                         <div className="flex flex-1 overflow-hidden h-full">
                             {/* LEFT DETAILS */}
-                            <div className={`flex flex-col h-full border-r border-gray-200 overflow-hidden transition-all duration-300 ${isCvPreviewOpen ? 'w-1/2 min-w-[600px]' : 'w-full'}`}>
+                            <div className="flex flex-col h-full overflow-hidden w-full">
                                 <div className="p-6 border-b border-gray-100 bg-gray-50 shrink-0">
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex items-center gap-4">
@@ -979,8 +918,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                             
                                             {viewingApp.candidate.cvFileBase64 && (
                                                 <div className="pt-4 border-t border-gray-100">
-                                                    <button onClick={() => setIsCvPreviewOpen(!isCvPreviewOpen)} className={`w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-colors border font-medium ${isCvPreviewOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-                                                        {isCvPreviewOpen ? <Minimize2 size={18}/> : <Maximize2 size={18}/>} {isCvPreviewOpen ? 'Chiudi Anteprima' : 'Apri Anteprima CV'}
+                                                    <button onClick={handleOpenCV} className="w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-colors border font-medium bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100">
+                                                        <ExternalLink size={18}/> Apri CV in Nuova Scheda
                                                     </button>
                                                 </div>
                                             )}
@@ -1106,19 +1045,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     )}
                                 </div>
                             </div>
-
-                            {/* RIGHT PREVIEW */}
-                            {isCvPreviewOpen && viewingApp.candidate.cvFileBase64 && viewingApp.candidate.cvMimeType && (
-                                <div className="flex-1 bg-gray-100 h-full flex flex-col overflow-hidden relative border-l border-gray-200">
-                                    <div className="p-3 bg-white border-b border-gray-200 flex justify-between items-center shadow-sm z-10">
-                                        <span className="text-sm font-bold text-gray-700 flex items-center gap-2"><FileText size={16}/> Anteprima Documento</span>
-                                        <button onClick={() => setIsCvPreviewOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                                    </div>
-                                    <div className="flex-1 relative overflow-hidden">
-                                        <PdfPreview base64={viewingApp.candidate.cvFileBase64} mimeType={viewingApp.candidate.cvMimeType} />
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>

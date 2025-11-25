@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, UploadCloud, Building2 } from 'lucide-react';
+import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, UploadCloud, Building2, ShieldCheck, FileText } from 'lucide-react';
 import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud, getCompanyInfo, updateCompanyInfo } from '../services/storage';
 import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig } from '../services/firebase';
 import { AppState, User, UserRole, BackupMetadata, DeletedItem, CompanyInfo } from '../types';
@@ -279,6 +279,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
         refreshData();
     };
 
+    const downloadPrivacyTemplate = () => {
+        const text = `INFORMATIVA PRIVACY CANDIDATI (Template Generico)
+        
+Titolare del Trattamento: ${companyInfo.name || '[Inserire Nome Azienda]'}
+Settore: ${companyInfo.industry || '[Settore]'}
+
+1. Finalità del Trattamento
+I dati personali contenuti nel CV saranno trattati esclusivamente per finalità di selezione del personale.
+
+2. Modalità di Trattamento
+Il trattamento avverrà mediante strumenti manuali, informatici e telematici (incluso l'ausilio di sistemi di Intelligenza Artificiale per l'analisi delle competenze) con logiche strettamente correlate alle finalità.
+
+3. Conservazione dei Dati
+I dati saranno conservati per il tempo strettamente necessario alla selezione (max 24 mesi) e successivamente cancellati, salvo diversa indicazione di legge.
+
+4. Diritti dell'Interessato
+L'interessato può esercitare i diritti di accesso, rettifica, cancellazione e opposizione al trattamento contattando il titolare.
+
+NOTA: Questo documento è un modello generico. Si consiglia di consultare un legale per la conformità specifica.`;
+        
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Informativa_Privacy_Template.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="p-8 max-w-4xl mx-auto h-full overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
@@ -353,6 +383,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
                         </form>
                     </div>
                  )}
+
+                {/* GDPR & PRIVACY SECTION */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <ShieldCheck size={20} className="text-indigo-600"/> GDPR & Compliance Privacy
+                    </h3>
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+                        <h4 className="font-bold text-blue-900 text-sm mb-2 flex items-center gap-2">
+                            <Database size={14}/> Stato Archiviazione Dati
+                        </h4>
+                        <p className="text-xs text-blue-800 mb-2">
+                            {currentConfig 
+                                ? "I dati sono salvati su Google Cloud (Firebase). Verifica nella console di Google che la 'Location' del progetto sia in Europa (es. europe-west) per la massima compliance."
+                                : "I dati sono salvati SOLO nel browser locale (LocalStorage) di questo dispositivo. Non vengono trasmessi a server esterni per l'archiviazione, ma solo processati temporaneamente dall'AI."
+                            }
+                        </p>
+                        <p className="text-xs text-blue-800 font-bold">
+                            Nota: L'uso delle funzioni AI comporta l'invio del testo dei CV alle API di Google Gemini.
+                        </p>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                        <div className="text-sm text-gray-600">
+                            Scarica un modello di informativa privacy da personalizzare e fornire ai candidati.
+                        </div>
+                        <button 
+                            onClick={downloadPrivacyTemplate}
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 text-gray-700 shadow-sm"
+                        >
+                            <FileText size={16}/> Scarica Template Privacy
+                        </button>
+                    </div>
+                </div>
 
                 {/* ADMIN: USER MANAGEMENT */}
                 {currentUser?.role === UserRole.ADMIN && (
