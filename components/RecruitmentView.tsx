@@ -288,7 +288,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
         if (viewingApp.candidate.cvFileBase64 && viewingApp.candidate.cvMimeType) {
             try {
-                const byteCharacters = atob(viewingApp.candidate.cvFileBase64);
+                const byteCharacters = atob(viewingApp.candidate.cvFileBase64 || '');
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
@@ -311,7 +311,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const handlePriorityChange = (priority: 'LOW' | 'MEDIUM' | 'HIGH') => { if (viewingApp) { updateApplicationMetadata(viewingApp.app.id, { priority }); setViewingApp(prev => prev ? { ...prev, app: { ...prev.app, priority } } : null); refreshData(); } };
     const handleStatusChange = (newStatus: SelectionStatus) => { if (!viewingApp) return; if (newStatus === SelectionStatus.REJECTED) { setViewingApp(null); setPendingRejection({ appId: viewingApp.app.id, status: newStatus }); } else { updateApplicationStatus(viewingApp.app.id, newStatus); setViewingApp(prev => prev ? { ...prev, app: { ...prev.app, status: newStatus } } : null); refreshData(); } };
     const handleCandidateUpdate = async (field: keyof Candidate, value: any) => { if (!viewingApp) return; const updatedCandidate = { ...viewingApp.candidate, [field]: value }; setViewingApp(prev => prev ? { ...prev, candidate: updatedCandidate } : null); await updateCandidate(updatedCandidate); refreshData(); };
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files.length > 0 && selectedJobId) { onUpload(Array.from(e.target.files), selectedJobId); if (fileInputRef.current) fileInputRef.current.value = ''; } };
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files.length > 0 && selectedJobId) { onUpload(Array.from(e.target.files) as File[], selectedJobId); if (fileInputRef.current) fileInputRef.current.value = ''; } };
     const handleSort = (key: string) => { let direction: 'asc' | 'desc' = 'asc'; if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') { direction = 'desc'; } setSortConfig({ key, direction }); };
 
     const handleAddComment = async () => {
@@ -333,7 +333,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     // ATTACHMENT HANDLERS (New for Recruitment View)
     const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if(!viewingApp || !e.target.files?.length || !currentUser) return;
-        const files = Array.from(e.target.files);
+        const files: File[] = Array.from(e.target.files);
         
         for (const file of files) {
             const reader = new FileReader();

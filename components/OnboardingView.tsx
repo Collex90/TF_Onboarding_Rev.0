@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppState, OnboardingProcess, OnboardingTask, User, OnboardingPhase, OnboardingPhaseLabels, OnboardingStatus, OnboardingStatusLabels, OnboardingStatusColors, UserRole, Comment, Attachment } from '../types';
-import { CheckCircle, Circle, Clock, Trash2, Search, Flag, Plus, Sparkles, Loader2, X, User as UserIcon, Calendar, ChevronRight, Filter, MessageSquare, Paperclip, FileText, Download, Send, Table, Image, GripVertical, AlertCircle } from 'lucide-react';
+import { CheckCircle, Circle, Clock, Trash2, Search, Flag, Plus, Sparkles, Loader2, X, User as UserIcon, Calendar, ChevronRight, Filter, MessageSquare, Paperclip, FileText, Download, Send, Table, Image, GripVertical, AlertCircle, Upload } from 'lucide-react';
 import { updateOnboardingTask, deleteOnboardingProcess, generateId, createOnboardingProcess, getAllUsers, updateOnboardingStatus, addOnboardingComment, addTaskComment, addTaskAttachment, deleteTaskAttachment } from '../services/storage';
 import { generateOnboardingChecklist } from '../services/ai';
 import { OnboardingSetupModal } from './OnboardingSetupModal';
@@ -21,7 +20,6 @@ const getFileIcon = (mimeType: string) => {
 };
 
 export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshData, currentUser }) => {
-    // ... all component logic ...
     const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<OnboardingStatus[]>([]);
@@ -49,15 +47,23 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
         getAllUsers().then(setAllUsers);
     }, []);
 
-    // AUTO-FOCUS ON COMMENTS TAB
+    // AUTO-FOCUS ON PROCESS COMMENTS TAB
     useEffect(() => {
         if (processTab === 'comments' && processCommentInputRef.current) {
-            // Small timeout to ensure rendering
             setTimeout(() => {
                 processCommentInputRef.current?.focus();
-            }, 50);
+            }, 100);
         }
     }, [processTab]);
+
+    // AUTO-FOCUS ON TASK COMMENTS TAB
+    useEffect(() => {
+        if (taskTab === 'comments' && commentInputRef.current) {
+            setTimeout(() => {
+                commentInputRef.current?.focus();
+            }, 100);
+        }
+    }, [taskTab]);
 
     const activeUsers = useMemo(() => allUsers.filter(u => !u.isDeleted), [allUsers]);
 
@@ -141,7 +147,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
         setNewProcessComment('');
         refreshData();
         // Keep focus
-        setTimeout(() => processCommentInputRef.current?.focus(), 50);
+        setTimeout(() => processCommentInputRef.current?.focus(), 100);
     };
 
     const handleProcessCommentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -164,17 +170,21 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
         setNewTaskComment('');
         setViewingTask(prev => prev ? { ...prev, comments: [...(prev.comments || []), comment] } : null);
         refreshData();
+        // Keep focus
+        setTimeout(() => commentInputRef.current?.focus(), 100);
     };
 
     const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if(!selectedProcess || !viewingTask || !e.target.files?.length || !currentUser) return;
         
-        const files = Array.from(e.target.files);
+        // Fix: Explicitly cast Array.from result to File[] to avoid 'unknown' type error
+        const files: File[] = Array.from(e.target.files || []);
         
         for (const file of files) {
             const reader = new FileReader();
             reader.onload = async () => {
-                const base64 = (reader.result as string).split(',')[1];
+                const res = reader.result as string;
+                const base64 = res.split(',')[1];
                 const attachment: Attachment = {
                     id: generateId(),
                     name: file.name,
@@ -427,24 +437,31 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                 <div key={c.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                                                     <div className="flex justify-between items-center mb-2">
                                                         <span className="font-bold text-sm text-gray-900">{c.authorName}</span>
-                                                        <span className="text-xs text-gray-500">{new Date(c.createdAt).toLocaleString()}</span>
+                                                        <span className="text-xs text-gray-400">{new Date(c.createdAt).toLocaleDateString()}</span>
                                                     </div>
-                                                    <p className="text-gray-700 text-sm whitespace-pre-wrap">{c.text}</p>
+                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.text}</p>
                                                 </div>
                                             ))
                                         )}
                                     </div>
-                                    <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col gap-2">
-                                        <textarea
-                                            ref={processCommentInputRef}
-                                            value={newProcessComment}
-                                            onChange={e => setNewProcessComment(e.target.value)}
-                                            onKeyDown={handleProcessCommentKeyDown}
-                                            placeholder="Scrivi una nota generale... (Ctrl+Invio per inviare)"
-                                            className="w-full bg-gray-50 border border-gray-100 rounded-lg p-3 outline-none text-sm text-gray-900 resize-none min-h-[80px]"
-                                        />
-                                        <div className="flex justify-end">
-                                            <button onClick={handleAddProcessComment} disabled={!newProcessComment.trim()} className="text-white bg-indigo-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors">Invia Commento</button>
+                                    <div className="mt-auto pt-4 border-t border-gray-200">
+                                        <div className="relative">
+                                            <textarea 
+                                                ref={processCommentInputRef}
+                                                className="w-full bg-white border border-gray-200 rounded-xl p-3 pr-12 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none resize-none shadow-sm"
+                                                rows={3}
+                                                placeholder="Scrivi un commento generale..."
+                                                value={newProcessComment}
+                                                onChange={e => setNewProcessComment(e.target.value)}
+                                                onKeyDown={handleProcessCommentKeyDown}
+                                            />
+                                            <button 
+                                                onClick={handleAddProcessComment}
+                                                disabled={!newProcessComment.trim()}
+                                                className="absolute right-3 bottom-3 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+                                            >
+                                                <Send size={16}/>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -452,106 +469,110 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                         </div>
                     </>
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                         <Flag size={48} className="mb-4 opacity-20"/>
-                        <p className="font-medium">Seleziona un processo di onboarding</p>
+                        <p className="text-lg font-medium">Seleziona un processo di onboarding</p>
                     </div>
                 )}
             </div>
 
-            {/* TASK DETAILS SLIDE-OVER */}
+            {/* TASK QUICK VIEW OVERLAY */}
             {viewingTask && selectedProcess && (
-                <div className="fixed inset-0 bg-black/30 z-[100] backdrop-blur-[1px] flex justify-end" onClick={() => setViewingTask(null)}>
-                    <div className="w-[500px] bg-white h-full shadow-2xl flex flex-col animate-slide-left" onClick={e => e.stopPropagation()}>
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-gray-50">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900 mb-1">{viewingTask.description}</h3>
-                                <div className="flex gap-2">
-                                    <span className="text-xs bg-white border border-gray-200 px-2 py-1 rounded font-medium text-gray-600">{viewingTask.department}</span>
-                                    <span className="text-xs bg-white border border-gray-200 px-2 py-1 rounded font-medium text-gray-600">{OnboardingPhaseLabels[viewingTask.phase]}</span>
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-[70] backdrop-blur-[2px]" onClick={() => setViewingTask(null)}>
+                    <div className="bg-white h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-start">
+                             <div>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">{viewingTask.description}</h3>
+                                <div className="flex items-center gap-3 text-sm">
+                                    <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-medium">{viewingTask.department}</span>
+                                    <span className="text-gray-500">{OnboardingPhaseLabels[viewingTask.phase]}</span>
                                 </div>
                             </div>
                             <button onClick={() => setViewingTask(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                         </div>
 
-                        {/* TASK TABS */}
-                        <div className="flex border-b border-gray-100">
-                            <button onClick={() => setTaskTab('info')} className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${taskTab === 'info' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Dettagli</button>
-                            <button onClick={() => setTaskTab('comments')} className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${taskTab === 'comments' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Commenti ({viewingTask.comments?.length || 0})</button>
-                            <button onClick={() => setTaskTab('attachments')} className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${taskTab === 'attachments' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Allegati ({viewingTask.attachments?.length || 0})</button>
+                        {/* TABS */}
+                        <div className="flex border-b border-gray-200 px-6 gap-6">
+                             {[{id:'info', label:'Dettagli'}, {id:'comments', label:`Commenti (${viewingTask.comments?.length || 0})`}, {id:'attachments', label:`Allegati (${viewingTask.attachments?.length || 0})`}].map(tab => (
+                                <button 
+                                    key={tab.id} 
+                                    onClick={() => setTaskTab(tab.id as any)}
+                                    className={`py-3 text-sm font-bold border-b-2 transition-colors ${taskTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    {tab.label}
+                                </button>
+                             ))}
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6">
+                        <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar">
                             {taskTab === 'info' && (
                                 <div className="space-y-6">
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-center justify-between">
-                                        <span className="text-sm font-bold text-gray-700">Stato</span>
-                                        <button 
-                                            onClick={() => toggleTask(viewingTask.id, viewingTask.isCompleted)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors ${viewingTask.isCompleted ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
-                                        >
-                                            {viewingTask.isCompleted ? <><CheckCircle size={16}/> Completato</> : <><Circle size={16}/> Da Fare</>}
-                                        </button>
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Assegnato a</label>
-                                        <div className="relative p-3 bg-white border border-gray-200 rounded-lg">
+                                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Stato</label>
+                                            <button 
+                                                onClick={() => toggleTask(viewingTask.id, viewingTask.isCompleted)}
+                                                className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg font-bold border ${viewingTask.isCompleted ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-300'}`}
+                                            >
+                                                {viewingTask.isCompleted ? <><CheckCircle size={16}/> Completato</> : <><Circle size={16}/> Da Completare</>}
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Assegnatario</label>
                                             <select 
                                                 value={viewingTask.assigneeId || ''}
                                                 onChange={(e) => handleTaskFieldUpdate(viewingTask.id, 'assigneeId', e.target.value || undefined)}
-                                                className="w-full bg-transparent outline-none text-sm font-medium text-gray-900 cursor-pointer"
+                                                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
                                             >
                                                 <option value="">-- Nessuno --</option>
-                                                {activeUsers.map(u => (
-                                                    <option key={u.uid} value={u.uid}>{u.name}</option>
-                                                ))}
+                                                {activeUsers.map(u => <option key={u.uid} value={u.uid}>{u.name}</option>)}
                                             </select>
                                         </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Scadenza</label>
-                                        <div className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-900">
-                                            <Calendar size={16} className="text-gray-400"/>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Scadenza</label>
                                             <input 
                                                 type="date"
                                                 value={viewingTask.dueDate ? new Date(viewingTask.dueDate).toISOString().split('T')[0] : ''}
-                                                onChange={(e) => {
-                                                    const timestamp = e.target.value ? new Date(e.target.value).getTime() : undefined;
-                                                    handleTaskFieldUpdate(viewingTask.id, 'dueDate', timestamp);
-                                                }}
-                                                className="w-full bg-transparent outline-none font-medium cursor-pointer text-gray-900"
+                                                onChange={(e) => handleTaskFieldUpdate(viewingTask.id, 'dueDate', e.target.value ? new Date(e.target.value).getTime() : undefined)}
+                                                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
                                             />
                                         </div>
-                                    </div>
+                                     </div>
                                 </div>
                             )}
 
                             {taskTab === 'comments' && (
                                 <div className="flex flex-col h-full">
                                     <div className="flex-1 space-y-4 mb-4">
-                                        {!viewingTask.comments?.length ? <p className="text-center text-gray-400 italic py-4">Nessun commento.</p> : viewingTask.comments.map(c => (
-                                            <div key={c.id} className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="font-bold text-xs text-gray-900">{c.authorName}</span>
-                                                    <span className="text-[10px] text-gray-500">{new Date(c.createdAt).toLocaleDateString()}</span>
+                                        {!viewingTask.comments || viewingTask.comments.length === 0 ? (
+                                            <div className="text-center text-gray-400 py-8 italic">Nessun commento su questo task.</div>
+                                        ) : (
+                                            viewingTask.comments.map(c => (
+                                                <div key={c.id} className="bg-gray-50 p-3 rounded-xl rounded-tl-none border border-gray-100 ml-2">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-xs font-bold text-gray-900">{c.authorName}</span>
+                                                        <span className="text-[10px] text-gray-400">{new Date(c.createdAt).toLocaleDateString()}</span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-900 whitespace-pre-wrap">{c.text}</p>
                                                 </div>
-                                                <p className="text-sm text-gray-700">{c.text}</p>
-                                            </div>
-                                        ))}
+                                            ))
+                                        )}
                                     </div>
-                                    <div className="relative">
+                                    <div className="relative mt-auto pt-4 border-t border-gray-100">
                                         <textarea 
                                             ref={commentInputRef}
+                                            className="w-full bg-white border border-gray-200 rounded-xl p-3 pr-12 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                                            rows={3}
+                                            placeholder="Scrivi un commento..."
                                             value={newTaskComment}
                                             onChange={e => setNewTaskComment(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && handleAddTaskComment()}
-                                            placeholder="Scrivi un commento... (Ctrl+Invio)" 
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 pl-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-gray-900"
-                                            rows={2}
+                                            onKeyDown={(e) => { if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleAddTaskComment(); }}}
                                         />
-                                        <button onClick={handleAddTaskComment} disabled={!newTaskComment.trim()} className="absolute right-2 bottom-2 text-indigo-600 hover:text-indigo-800 disabled:opacity-50 p-1">
+                                        <button 
+                                            onClick={handleAddTaskComment}
+                                            disabled={!newTaskComment.trim()}
+                                            className="absolute right-3 bottom-3 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                                        >
                                             <Send size={16}/>
                                         </button>
                                     </div>
@@ -560,37 +581,32 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
 
                             {taskTab === 'attachments' && (
                                 <div className="space-y-4">
-                                    <div className="flex justify-end">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h4 className="text-xs font-bold text-gray-400 uppercase">File Allegati</h4>
                                         <input type="file" multiple ref={attachmentInputRef} className="hidden" onChange={handleAttachmentUpload}/>
-                                        <button onClick={() => attachmentInputRef.current?.click()} className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded font-bold border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1">
-                                            <Plus size={12}/> Aggiungi
+                                        <button onClick={() => attachmentInputRef.current?.click()} className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 font-bold flex items-center gap-1">
+                                            <Upload size={12}/> Carica
                                         </button>
                                     </div>
-                                    {!viewingTask.attachments?.length ? <p className="text-center text-gray-400 italic py-4">Nessun allegato.</p> : (
-                                        <div className="space-y-2">
+                                    {!viewingTask.attachments || viewingTask.attachments.length === 0 ? (
+                                        <div className="text-center text-gray-400 py-8 italic border-2 border-dashed border-gray-100 rounded-xl">Nessun file allegato.</div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-3">
                                             {viewingTask.attachments.map(file => (
-                                                <div key={file.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
-                                                    <div className="flex items-center gap-3 overflow-hidden">
-                                                        <div className="p-2 bg-gray-100 rounded text-gray-500">
+                                                <div key={file.id} className="border border-gray-200 rounded-lg p-3 hover:shadow-sm bg-gray-50">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="p-2 bg-white rounded shadow-sm">
                                                             {getFileIcon(file.type)}
                                                         </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-bold text-gray-900 truncate" title={file.name}>{file.name}</p>
-                                                            <p className="text-[10px] text-gray-500">{new Date(file.createdAt).toLocaleDateString()} • {file.uploadedBy}</p>
+                                                        <div className="flex gap-1">
+                                                            <a href={file.url || `data:${file.type};base64,${file.dataBase64}`} download={file.name} target="_blank" className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Download size={16}/></a>
+                                                            <button onClick={() => handleDeleteAttachment(file.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex gap-2">
-                                                        <a href={file.url || `data:${file.type};base64,${file.dataBase64}`} download={file.name} target="_blank" className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded">
-                                                            <Download size={16}/>
-                                                        </a>
-                                                        {(currentUser?.role === UserRole.ADMIN || file.uploadedBy === currentUser?.name) && (
-                                                            <button 
-                                                                onClick={() => handleDeleteAttachment(file.id)}
-                                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                                            >
-                                                                <Trash2 size={16}/>
-                                                            </button>
-                                                        )}
+                                                    <p className="text-xs font-bold text-gray-900 truncate mb-1" title={file.name}>{file.name}</p>
+                                                    <div className="flex justify-between text-[10px] text-gray-500">
+                                                        <span>{new Date(file.createdAt).toLocaleDateString()}</span>
+                                                        <span>{file.uploadedBy}</span>
                                                     </div>
                                                 </div>
                                             ))}
@@ -602,19 +618,16 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                     </div>
                 </div>
             )}
-            
-            {/* SETUP MODAL: Using a mocked empty candidate/job to allow manual creation from scratch if needed */}
-             {isSetupModalOpen && (
-                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] backdrop-blur-sm">
-                    <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full text-center">
-                        <Sparkles size={48} className="mx-auto text-indigo-200 mb-4"/>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Creazione Manuale</h3>
-                        <p className="text-gray-500 mb-6 text-sm">
-                            Per avviare un onboarding, vai nella sezione <b>Recruitment</b>, seleziona un candidato assunto e clicca su "Onboarding".
-                        </p>
-                        <button onClick={() => setIsSetupModalOpen(false)} className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold">Ho capito</button>
-                    </div>
-                 </div>
+
+            {/* SETUP MODAL */}
+            {isSetupModalOpen && (
+                 <OnboardingSetupModal 
+                    isOpen={isSetupModalOpen}
+                    onClose={() => setIsSetupModalOpen(false)}
+                    candidate={data.candidates[0] || { id: 'dummy', fullName: 'Nuovo Processo', email: '', skills: [], summary: '', status: 'CANDIDATE', createdAt: 0 }} // Dummy if generic
+                    job={data.jobs[0] || { id: 'dummy', title: 'Generico', department: '', description: '', requirements: '', status: 'OPEN', createdAt: 0 }}
+                    onProcessCreated={() => { setIsSetupModalOpen(false); refreshData(); }}
+                />
             )}
         </div>
     );

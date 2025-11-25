@@ -203,7 +203,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
 
         if (viewingCandidate.cvFileBase64 && viewingCandidate.cvMimeType) {
             try {
-                const byteCharacters = atob(viewingCandidate.cvFileBase64);
+                const byteCharacters = atob(viewingCandidate.cvFileBase64 || '');
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
@@ -349,12 +349,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
 
     const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if(!viewingCandidate || !e.target.files?.length || !currentUser) return;
-        const files = Array.from(e.target.files);
+        const files: File[] = Array.from(e.target.files || []);
         
         for (const file of files) {
             const reader = new FileReader();
             reader.onload = async () => {
-                const base64 = (reader.result as string).split(',')[1];
+                const res = reader.result as string;
+                const base64 = res.split(',')[1];
                 const attachment: Attachment = {
                     id: generateId(),
                     name: file.name,
@@ -446,7 +447,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
 
     const handleBulkFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            onUpload(Array.from(e.target.files));
+            onUpload(Array.from(e.target.files) as File[]);
             if (bulkInputRef.current) bulkInputRef.current.value = '';
         }
     };
