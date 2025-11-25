@@ -991,6 +991,12 @@ export const getEmailTemplates = (): EmailTemplate[] => [
         name: 'Proposta di Assunzione',
         subject: 'Offerta di lavoro - {jobTitle} - {candidateName}',
         body: `Gentile {candidateName},\n\nSiamo lieti di informarti che il processo di selezione ha avuto esito positivo!\n\nVorremmo offrirti la posizione di {jobTitle}. In allegato troverai i dettagli della nostra proposta.\n\nSperiamo di averti presto nel nostro team.\n\nCordiali saluti,\nIl Team HR`
+    },
+    {
+        id: 'gdpr_consent',
+        name: 'Richiesta Consenso Privacy',
+        subject: 'Conferma ricezione CV e Consenso Privacy - {candidateName}',
+        body: `Gentile {candidateName},\n\nGrazie per aver inviato la tua candidatura per la posizione di {jobTitle}.\n\nPer procedere con la valutazione, inclusa l'analisi automatizzata delle competenze tramite sistemi AI, abbiamo bisogno della tua esplicita conferma di aver preso visione della nostra informativa privacy.\n\nPuoi consultare l'informativa a questo link: [INSERIRE LINK PRIVACY].\n\nTi preghiamo di rispondere a questa email con "CONFERMO" per autorizzare il trattamento dei dati. In mancanza di conferma, dovremo cancellare il tuo CV dai nostri sistemi.\n\nCordiali saluti,\nIl Team HR`
     }
 ];
 
