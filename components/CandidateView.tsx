@@ -231,7 +231,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         if (candidate.cvFileBase64 && candidate.cvMimeType) {
             const link = document.createElement('a');
             link.href = `data:${candidate.cvMimeType};base64,${candidate.cvFileBase64}`;
-            link.download = `${candidate.fullName.replace(/\s+/g, '_')}_CV`;
+            const fileName: string = `${candidate.fullName.replace(/\s+/g, '_')}_CV`;
+            link.download = fileName;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

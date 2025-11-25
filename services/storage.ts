@@ -34,10 +34,14 @@ const defaultState: AppState = {
   companyInfo: { name: '', industry: '', description: '', productsServices: '' }
 };
 
-// Helper for ID generation
+// Helper for ID generation - ROBUST FALLBACK
 export const generateId = (): string => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
+    try {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+    } catch (e) {
+        // Fallback if crypto.randomUUID fails (e.g. non-secure context)
     }
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
@@ -1012,8 +1016,8 @@ export const getEmailTemplates = (): EmailTemplate[] => [
 
 export const seedDatabase = async (assignToUserId?: string) => {
     // Keep seed data simple (no storage needed for mock)
-    // Fallback to auth.currentUser if no ID is passed
-    const targetUserId = assignToUserId || auth?.currentUser?.uid;
+    // Fallback if no ID passed or auth not ready
+    const targetUserId = assignToUserId || (auth?.currentUser?.uid) || generateId();
     
     // 5 CANDIDATES
     const mockCandidates: Candidate[] = [

@@ -4,9 +4,7 @@ import App from './App';
 import './index.css';
 
 // Error Boundary Component
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
+interface ErrorBoundaryProps extends React.PropsWithChildren<{}> {}
 
 interface ErrorBoundaryState {
   hasError: boolean;

@@ -77,6 +77,14 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const attachmentInputRef = useRef<HTMLInputElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // Autofocus on search input when component mounts
+    useEffect(() => {
+        if (!selectedJobId) {
+            searchInputRef.current?.focus();
+        }
+    }, [selectedJobId]);
 
     useEffect(() => {
         if (!viewingApp) { setIsPhotoZoomed(false); }
@@ -521,7 +529,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         if (!candidate) return null;
                         const isDragging = draggedAppId === app.id;
                         const priorityColor = app.priority === 'HIGH' ? 'bg-red-100 text-red-800 border-red-200' : app.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : app.priority === 'LOW' ? 'bg-blue-100 text-blue-800 border-blue-200' : null;
-                        const totalScore = app.scorecardResults ? Object.values(app.scorecardResults).reduce((sum: number, v: number) => sum + v, 0) : 0;
+                        const totalScore = app.scorecardResults ? (Object.values(app.scorecardResults) as number[]).reduce((sum: number, v: number) => sum + v, 0) : 0;
                         const maxScore = selectedJob?.scorecardSchema ? selectedJob.scorecardSchema.categories.reduce((acc, cat) => acc + cat.items.length * 5, 0) : 0;
 
                         return (
@@ -550,7 +558,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 <div className="flex justify-between items-start mb-8 gap-4 flex-wrap">
                     <div><h2 className="text-2xl font-bold text-gray-900">Posizioni Aperte</h2><p className="text-gray-500">Seleziona una posizione per gestire la pipeline.</p></div>
                     <div className="flex items-center gap-3 flex-1 max-w-xl justify-end">
-                        <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="Cerca posizioni o candidati..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-full focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-shadow text-gray-900" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                        <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} /><input ref={searchInputRef} type="text" placeholder="Cerca posizioni o candidati..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-full focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-shadow text-gray-900" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
                         {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
                             <>
                                 <button onClick={() => setIsTemplateManagerOpen(true)} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm shrink-0 font-medium transition-colors"><ListChecks size={20}/> Libreria Modelli</button>
@@ -569,7 +577,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         const isAssigned = job.assignedTeamMembers?.includes(currentUser?.uid || '');
                         return (
                             <div key={job.id} onClick={() => setSelectedJobId(job.id)} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-indigo-200 hover:shadow-md cursor-pointer transition-all group flex flex-col relative">
-                                {currentUser?.role === UserRole.TEAM && isAssigned && (<div className="absolute top-6 right-6 text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full font-bold flex items-center gap-1 border border-indigo-100"><Shield size={10}/> ASSEGNATO</div>)}
+                                {currentUser?.role === UserRole.TEAM && isAssigned && (<div className="absolute top-0 right-0 rounded-bl-xl rounded-tr-xl text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 font-bold flex items-center gap-1 border-b border-l border-indigo-100"><Shield size={10}/> ASSEGNATO</div>)}
                                 <div className="flex justify-between items-start mb-2 pr-20"><h3 className="text-xl font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{job.title}</h3><span className={`text-xs px-2 py-1 rounded-full font-medium ${job.status === 'OPEN' ? 'bg-green-100 text-green-800' : job.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'}`}>{job.status}</span></div>
                                 <p className="text-gray-500 text-sm mb-4">{job.department}</p>
                                 <div className="mt-auto flex justify-between items-center text-sm pt-4 border-t border-gray-50"><div className="flex gap-4 text-xs"><span className="font-bold text-gray-700">{activeCount} <span className="text-gray-400 font-normal">Attivi</span></span><span className="font-bold text-green-700">{hiredCount} <span className="text-gray-400 font-normal">Assunti</span></span><span className="font-bold text-red-700">{rejectedCount} <span className="text-gray-400 font-normal">Scartati</span></span></div>
@@ -814,7 +822,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         {applicationsForJob.map(app => {
                                             const candidate = data.candidates.find(c => c.id === app.candidateId);
                                             if (!candidate) return null;
-                                            const totalScore = app.scorecardResults ? Object.values(app.scorecardResults).reduce((sum: number, v: number) => sum + v, 0) : 0;
+                                            const totalScore = app.scorecardResults ? (Object.values(app.scorecardResults) as number[]).reduce((sum: number, v: number) => sum + v, 0) : 0;
                                             const maxScore = selectedJob?.scorecardSchema ? selectedJob.scorecardSchema.categories.reduce((acc, cat) => acc + cat.items.length * 5, 0) : 0;
 
                                             return (

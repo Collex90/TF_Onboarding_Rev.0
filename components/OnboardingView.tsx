@@ -36,6 +36,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const commentInputRef = useRef<HTMLTextAreaElement>(null);
     const processCommentInputRef = useRef<HTMLTextAreaElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Assignee Logic
     const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -45,7 +46,11 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
 
     useEffect(() => {
         getAllUsers().then(setAllUsers);
-    }, []);
+        // Autofocus search on mount if no process selected
+        if (!selectedProcessId) {
+            searchInputRef.current?.focus();
+        }
+    }, [selectedProcessId]);
 
     // AUTO-FOCUS ON PROCESS COMMENTS TAB
     useEffect(() => {
@@ -234,6 +239,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                     <div className="relative mb-3">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
                         <input 
+                            ref={searchInputRef}
                             type="text" 
                             placeholder="Cerca dipendente..." 
                             className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
@@ -439,7 +445,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                                                         <span className="font-bold text-sm text-gray-900">{c.authorName}</span>
                                                         <span className="text-xs text-gray-400">{new Date(c.createdAt).toLocaleDateString()}</span>
                                                     </div>
-                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.text}</p>
+                                                    <p className="text-sm text-gray-900 whitespace-pre-wrap">{c.text}</p>
                                                 </div>
                                             ))
                                         )}
