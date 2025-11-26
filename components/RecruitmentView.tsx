@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
-import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink } from 'lucide-react';
+import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info } from 'lucide-react';
 import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, addCandidateAttachment, deleteCandidateAttachment, deleteJob } from '../services/storage';
 import { evaluateFit, generateJobDetails, generateScorecardSchema } from '../services/ai';
 
@@ -22,6 +22,7 @@ const getFileIcon = (mimeType: string) => {
 export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshData, currentUser, onUpload }) => {
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [isJobModalOpen, setIsJobModalOpen] = useState(false);
+    const [viewingJobInfoId, setViewingJobInfoId] = useState<string | null>(null); // TRACKS WHICH JOB INFO IS OPEN
     const [editingJobId, setEditingJobId] = useState<string | null>(null);
     const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -78,6 +79,12 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const fileInputRef = useRef<HTMLInputElement>(null);
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // Helper to get the job object for the info modal
+    const jobInfoTarget = useMemo(() => {
+        if (!viewingJobInfoId) return null;
+        return data.jobs.find(j => j.id === viewingJobInfoId);
+    }, [viewingJobInfoId, data.jobs]);
 
     // Autofocus on search input when component mounts
     useEffect(() => {
@@ -552,7 +559,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     };
 
     if (!selectedJobId) {
-        // ... (Job selection view kept same)
+        // ... (Job selection view)
         return (
             <div className="p-8 h-full overflow-y-auto">
                 <div className="flex justify-between items-start mb-8 gap-4 flex-wrap">
@@ -582,6 +589,15 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 <p className="text-gray-500 text-sm mb-4">{job.department}</p>
                                 <div className="mt-auto flex justify-between items-center text-sm pt-4 border-t border-gray-50"><div className="flex gap-4 text-xs"><span className="font-bold text-gray-700">{activeCount} <span className="text-gray-400 font-normal">Attivi</span></span><span className="font-bold text-green-700">{hiredCount} <span className="text-gray-400 font-normal">Assunti</span></span><span className="font-bold text-red-700">{rejectedCount} <span className="text-gray-400 font-normal">Scartati</span></span></div>
                                 <div className="flex gap-2">
+                                    {/* QUICK INFO BUTTON */}
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); setViewingJobInfoId(job.id); }}
+                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                        title="Info Posizione"
+                                    >
+                                        <Info size={16}/>
+                                    </button>
+
                                     {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
                                         <>
                                             <button onClick={(e) => { e.stopPropagation(); openEditJobModal(job); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16}/></button>
@@ -754,6 +770,88 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     </div>
                 )}
 
+                {/* JOB INFO QUICK VIEW OVERLAY - MOVED TO END TO RENDER OVER EVERYTHING */}
+                {viewingJobInfoId && jobInfoTarget && (
+                    <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => setViewingJobInfoId(null)}>
+                        <div className="bg-white h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                            <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{jobInfoTarget.title}</h3>
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-medium">{jobInfoTarget.department}</span>
+                                        <span className={`text-xs px-2 py-1 rounded-full font-bold ${jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{jobInfoTarget.status}</span>
+                                    </div>
+                                </div>
+                                <button onClick={() => setViewingJobInfoId(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar space-y-6">
+                                
+                                {/* INFO SECTION */}
+                                <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                    <div>
+                                        <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Data Creazione</span>
+                                        <span className="font-medium text-gray-900">{new Date(jobInfoTarget.createdAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Candidati</span>
+                                        <span className="font-medium text-gray-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id).length}</span>
+                                    </div>
+                                </div>
+
+                                {/* DESCRIPTION SECTION */}
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
+                                        <FileText size={14}/> Descrizione Posizione
+                                    </h4>
+                                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                                        {jobInfoTarget.description || "Nessuna descrizione disponibile."}
+                                    </div>
+                                </div>
+
+                                {/* REQUIREMENTS SECTION */}
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
+                                        <ListChecks size={14}/> Requisiti
+                                    </h4>
+                                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                                        {jobInfoTarget.requirements || "Nessun requisito specificato."}
+                                    </div>
+                                </div>
+
+                                {/* TEAM MEMBERS SECTION */}
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
+                                        <Users size={14}/> Team di Selezione
+                                    </h4>
+                                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                                        {!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (
+                                            <p className="p-4 text-sm text-gray-400 italic">Nessun membro assegnato.</p>
+                                        ) : (
+                                            // In a real app, we would fetch users. Reusing availableUsers if populated, or just showing count/IDs
+                                            jobInfoTarget.assignedTeamMembers.map(uid => {
+                                                // Try to find user in availableUsers (if loaded) or show placeholder
+                                                const u = availableUsers.find(user => user.uid === uid);
+                                                return (
+                                                    <div key={uid} className="flex items-center gap-3 p-3 hover:bg-gray-50 border-b border-gray-50 last:border-0">
+                                                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-indigo-600 border border-gray-200">
+                                                            {u ? u.name.charAt(0) : '?'}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-gray-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p>
+                                                            <p className="text-xs text-gray-500">{u ? u.role : 'Membro Team'}</p>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div>
         );
     }
@@ -766,7 +864,15 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 <div className="flex items-center gap-4">
                     <button onClick={() => setSelectedJobId(null)} className="flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition-colors text-sm font-medium"><ArrowRight size={16} className="rotate-180" /> Torna alle posizioni</button>
                     <div className="h-6 w-px bg-gray-200"></div>
-                    <div><h2 className="text-lg font-bold text-gray-900 leading-tight">{selectedJob?.title}</h2><p className="text-xs text-gray-500">{selectedJob?.department}</p></div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-bold text-gray-900 leading-tight">{selectedJob?.title}</h2>
+                            <button onClick={() => selectedJob && setViewingJobInfoId(selectedJob.id)} className="text-gray-400 hover:text-indigo-600 transition-colors" title="Info Posizione">
+                                <Info size={18}/>
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-500">{selectedJob?.department}</p>
+                    </div>
                     <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${selectedJob?.status === 'OPEN' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>{selectedJob?.status}</span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -858,6 +964,88 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     </div>
                 )}
             </div>
+
+            {/* JOB INFO QUICK VIEW OVERLAY */}
+            {viewingJobInfoId && jobInfoTarget && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => setViewingJobInfoId(null)}>
+                    <div className="bg-white h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-start">
+                             <div>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">{jobInfoTarget.title}</h3>
+                                <div className="flex items-center gap-3 text-sm">
+                                    <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-medium">{jobInfoTarget.department}</span>
+                                    <span className={`text-xs px-2 py-1 rounded-full font-bold ${jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{jobInfoTarget.status}</span>
+                                </div>
+                            </div>
+                            <button onClick={() => setViewingJobInfoId(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar space-y-6">
+                            
+                            {/* INFO SECTION */}
+                            <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                <div>
+                                    <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Data Creazione</span>
+                                    <span className="font-medium text-gray-900">{new Date(jobInfoTarget.createdAt).toLocaleDateString()}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Candidati</span>
+                                    <span className="font-medium text-gray-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id).length}</span>
+                                </div>
+                            </div>
+
+                            {/* DESCRIPTION SECTION */}
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
+                                    <FileText size={14}/> Descrizione Posizione
+                                </h4>
+                                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                                    {jobInfoTarget.description || "Nessuna descrizione disponibile."}
+                                </div>
+                            </div>
+
+                            {/* REQUIREMENTS SECTION */}
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
+                                    <ListChecks size={14}/> Requisiti
+                                </h4>
+                                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                                    {jobInfoTarget.requirements || "Nessun requisito specificato."}
+                                </div>
+                            </div>
+
+                            {/* TEAM MEMBERS SECTION */}
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
+                                    <Users size={14}/> Team di Selezione
+                                </h4>
+                                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                                    {!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (
+                                        <p className="p-4 text-sm text-gray-400 italic">Nessun membro assegnato.</p>
+                                    ) : (
+                                        // In a real app, we would fetch users. Reusing availableUsers if populated, or just showing count/IDs
+                                        jobInfoTarget.assignedTeamMembers.map(uid => {
+                                            // Try to find user in availableUsers (if loaded) or show placeholder
+                                            const u = availableUsers.find(user => user.uid === uid);
+                                            return (
+                                                <div key={uid} className="flex items-center gap-3 p-3 hover:bg-gray-50 border-b border-gray-50 last:border-0">
+                                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-indigo-600 border border-gray-200">
+                                                        {u ? u.name.charAt(0) : '?'}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p>
+                                                        <p className="text-xs text-gray-500">{u ? u.role : 'Membro Team'}</p>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    )}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* QUICK VIEW OVERLAY */}
             {viewingApp && (

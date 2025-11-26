@@ -265,7 +265,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             setSelectedIds(new Set());
         } catch (error: any) {
             console.error("Delete error:", error);
-            alert("Errore durante l'eliminazione: " + (error?.message || String(error)));
+            const msg = error instanceof Error ? error.message : String(error);
+            alert("Errore durante l'eliminazione: " + msg);
         } finally {
             setIsDeleting(false);
         }
@@ -336,23 +337,23 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             reader.onload = async () => {
                 const res = reader.result;
                 // Safe check to ensure we have a string result
-                if (typeof res !== 'string') {
+                if (typeof res === 'string') {
+                    const base64String = res.split(',')[1] || '';
+                    try {
+                        // Force string types to avoid TS errors
+                        const parsedData = await parseCV(base64String, file.type);
+                        setFormData(prev => ({
+                            ...prev,
+                            ...parsedData,
+                            cvFileBase64: base64String,
+                            cvMimeType: file.type
+                        }));
+                    } catch (err: any) { setError("Errore AI: " + (err?.message || String(err))); } 
+                    finally { setIsLoading(false); }
+                } else {
                      setError("Errore formato file");
                      setIsLoading(false);
-                     return;
                 }
-                const base64String = res.split(',')[1] || '';
-                try {
-                    // Force string types to avoid TS errors
-                    const parsedData = await parseCV(base64String, file.type);
-                    setFormData(prev => ({
-                        ...prev,
-                        ...parsedData,
-                        cvFileBase64: base64String,
-                        cvMimeType: file.type
-                    }));
-                } catch (err: any) { setError("Errore AI: " + (err?.message || String(err))); } 
-                finally { setIsLoading(false); }
             };
             reader.readAsDataURL(file);
         } catch (err: any) { setError('Errore lettura file.'); setIsLoading(false); }
@@ -366,23 +367,24 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             const reader = new FileReader();
             reader.onload = async () => {
                 const res = reader.result;
-                if (typeof res !== 'string') return;
-                const base64 = res.split(',')[1];
-                const attachment: Attachment = {
-                    id: generateId(),
-                    name: file.name,
-                    type: file.type,
-                    dataBase64: base64,
-                    uploadedBy: currentUser.name,
-                    createdAt: Date.now()
-                };
-                await addCandidateAttachment(viewingCandidate.id, attachment);
-                
-                // UPDATE LOCAL STATE IMMEDIATELY FOR UI FEEDBACK
-                setViewingCandidate(prev => prev ? {
-                    ...prev,
-                    attachments: [...(prev.attachments || []), attachment]
-                } : null);
+                if (typeof res === 'string') {
+                    const base64 = res.split(',')[1];
+                    const attachment: Attachment = {
+                        id: generateId(),
+                        name: file.name,
+                        type: file.type,
+                        dataBase64: base64,
+                        uploadedBy: currentUser.name,
+                        createdAt: Date.now()
+                    };
+                    await addCandidateAttachment(viewingCandidate.id, attachment);
+                    
+                    // UPDATE LOCAL STATE IMMEDIATELY FOR UI FEEDBACK
+                    setViewingCandidate(prev => prev ? {
+                        ...prev,
+                        attachments: [...(prev.attachments || []), attachment]
+                    } : null);
+                }
             };
             reader.readAsDataURL(file);
         }
