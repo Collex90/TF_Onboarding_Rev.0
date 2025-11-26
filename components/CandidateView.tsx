@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Candidate, JobPosition, Application, User, Comment, StatusLabels, StatusColors, CandidateStatus, CandidateStatusLabels, CandidateStatusColors, Attachment, UserRole } from '../types';
-import { Plus, Upload, FileText, Sparkles, X, Users, Search, Pencil, UploadCloud, AlertTriangle, CheckCircle, Loader2, Trash2, Download, MessageSquare, Clock, Briefcase, Send, Building, Banknote, Eye, Maximize2, Minimize2, ZoomIn, ZoomOut, Phone, Mail, LayoutGrid, List, ChevronUp, ChevronDown, CheckSquare, Square, Star, Paperclip, Flag, Table, Image, ShieldCheck, ExternalLink } from 'lucide-react';
+import { Plus, Upload, FileText, Sparkles, X, Users, Search, Pencil, UploadCloud, AlertTriangle, CheckCircle, Loader2, Trash2, Download, MessageSquare, Clock, Briefcase, Send, Building, Banknote, Eye, Maximize2, Minimize2, ZoomIn, ZoomOut, Phone, Mail, LayoutGrid, List, ChevronUp, ChevronDown, CheckSquare, Square, Star, Paperclip, Flag, Table, Image, ShieldCheck, ExternalLink, Check } from 'lucide-react';
 import { parseCV, ParsedCVData } from '../services/ai';
 import { addCandidate, updateCandidate, generateId, addCandidateComment, deleteCandidate, addCandidateAttachment, deleteCandidateAttachment } from '../services/storage';
 import { OnboardingSetupModal } from './OnboardingSetupModal';
@@ -89,6 +90,9 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     // Onboarding Setup
     const [isOnboardingSetupOpen, setIsOnboardingSetupOpen] = useState(false);
 
+    // Custom Dropdown State
+    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+
     const [formData, setFormData] = useState<Partial<Candidate>>({
         fullName: '', email: '', phone: '', age: undefined, skills: [], summary: '',
         currentCompany: '', currentRole: '', currentSalary: '', benefits: [], status: CandidateStatus.CANDIDATE
@@ -121,6 +125,9 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             setIsPhotoZoomed(false);
             // Focus search when closing quick view or initially mounting
             searchInputRef.current?.focus();
+        } else {
+            // Reset dropdown state when opening a candidate
+            setIsStatusDropdownOpen(false);
         }
     }, [viewingCandidate]);
 
@@ -893,15 +900,45 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                                         placeholder="-"
                                                     />
                                                 </div>
-                                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                                    <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Stato</span>
-                                                    <select 
-                                                        value={viewingCandidate.status}
-                                                        onChange={(e) => handleCandidateUpdate('status', e.target.value)}
-                                                        className={`inline-block px-2 py-1 rounded text-xs font-bold border outline-none cursor-pointer w-full ${CandidateStatusColors[viewingCandidate.status]}`}
+                                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 relative">
+                                                    <span className="block text-xs font-bold text-gray-400 uppercase mb-2">Stato Attuale</span>
+                                                    
+                                                    <button 
+                                                        onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                                                        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg font-bold text-sm border transition-all ${CandidateStatusColors[viewingCandidate.status]} hover:brightness-95`}
                                                     >
-                                                        {Object.values(CandidateStatus).map(s => <option key={s} value={s}>{CandidateStatusLabels[s]}</option>)}
-                                                    </select>
+                                                        <span className="flex items-center gap-2">
+                                                            <span className={`w-2 h-2 rounded-full bg-current`}></span>
+                                                            {CandidateStatusLabels[viewingCandidate.status]}
+                                                        </span>
+                                                        <ChevronDown size={16} className={`transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`}/>
+                                                    </button>
+
+                                                    {isStatusDropdownOpen && (
+                                                        <>
+                                                            <div className="fixed inset-0 z-10" onClick={() => setIsStatusDropdownOpen(false)}></div>
+                                                            <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-20 animate-in fade-in slide-in-from-top-2">
+                                                                <div className="p-1.5 space-y-1">
+                                                                    {Object.values(CandidateStatus).map(status => (
+                                                                        <button
+                                                                            key={status}
+                                                                            onClick={() => {
+                                                                                handleCandidateUpdate('status', status);
+                                                                                setIsStatusDropdownOpen(false);
+                                                                            }}
+                                                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-between hover:bg-gray-50 transition-colors group ${viewingCandidate.status === status ? 'bg-gray-50 text-gray-900' : 'text-gray-600'}`}
+                                                                        >
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className={`w-2 h-2 rounded-full ${status === CandidateStatus.HIRED ? 'bg-green-500' : status === CandidateStatus.FORMER ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
+                                                                                {CandidateStatusLabels[status]}
+                                                                            </div>
+                                                                            {viewingCandidate.status === status && <Check size={14} className="text-indigo-600"/>}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                             
