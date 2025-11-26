@@ -343,6 +343,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                 }
                 const base64String = res.split(',')[1] || '';
                 try {
+                    // Force string types to avoid TS errors
                     const parsedData = await parseCV(base64String, file.type);
                     setFormData(prev => ({
                         ...prev,

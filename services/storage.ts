@@ -1,4 +1,4 @@
-import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus, BackupMetadata, DeletedItem } from '../types';
+import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus, BackupMetadata, DeletedItem, OnboardingPhase } from '../types';
 import { db, auth, storage } from './firebase';
 import { 
   collection, 
@@ -266,10 +266,7 @@ export const deleteScorecardTemplate = async (id: string) => {
 export const subscribeToData = (user: User | null, callback: (data: AppState) => void, onError?: (err: any) => void): (() => void) => {
   if (db) {
     const qCandidates = query(collection(db, 'candidates'));
-    
-    // Allow seeing all jobs for now to enable metrics, filtering is done in UI
     const qJobs = query(collection(db, 'jobs'));
-
     const qApps = query(collection(db, 'applications'));
     const qOnboarding = query(collection(db, 'onboarding'));
     const docCompany = doc(db, 'settings', 'company');
@@ -1009,254 +1006,188 @@ export const getEmailTemplates = (): EmailTemplate[] => [
 ];
 
 export const seedDatabase = async (assignToUserId?: string) => {
-    // Keep seed data simple (no storage needed for mock)
-    // Fallback if no ID passed or auth not ready
-    const targetUserId = assignToUserId || (auth?.currentUser?.uid) || generateId();
+    // GENERATE ID OR USE PASSED ID
+    const targetUserId = assignToUserId || generateId();
     
-    // 5 CANDIDATES
-    const mockCandidates: Candidate[] = [
-        {
-            id: 'c1',
-            fullName: 'Giulia Rossi',
-            email: 'giulia.rossi@example.com',
-            phone: '+39 333 1234567',
-            age: 28,
-            skills: ['React', 'TypeScript', 'Tailwind CSS', 'Figma'],
-            summary: 'Sviluppatrice Frontend Senior con 6 anni di esperienza nella creazione di interfacce utente complesse e scalabili.',
-            currentCompany: 'WebAgency Srl',
-            currentRole: 'Frontend Lead',
-            currentSalary: '35k',
-            benefits: ['Buoni Pasto', 'PC Aziendale'],
-            status: CandidateStatus.CANDIDATE,
-            createdAt: Date.now(),
-            comments: []
-        },
-        // ... rest of seed data same as original file ...
-        {
-            id: 'c2',
-            fullName: 'Marco Bianchi',
-            email: 'marco.bianchi@example.com',
-            phone: '+39 333 9876543',
-            age: 34,
-            skills: ['Project Management', 'Agile', 'Scrum', 'Jira'],
-            summary: 'Product Owner certificato con forte background tecnico e capacità di gestione team cross-funzionali.',
-            currentCompany: 'TechCorp SpA',
-            currentRole: 'Product Manager',
-            currentSalary: '55k',
-            benefits: ['Auto Aziendale', 'Assicurazione Sanitaria', 'Smart Working'],
-            status: CandidateStatus.CANDIDATE,
-            createdAt: Date.now(),
-            comments: []
-        },
-        {
-            id: 'c3',
-            fullName: 'Alessandro Verdi',
-            email: 'alessandro.verdi@example.com',
-            phone: '+39 333 4567890',
-            age: 26,
-            skills: ['Python', 'Machine Learning', 'TensorFlow', 'Data Analysis'],
-            summary: 'Data Scientist appassionato di AI generativa e analisi predittiva per il business.',
-            currentCompany: 'Startup AI',
-            currentRole: 'Jr Data Scientist',
-            currentSalary: '28k',
-            benefits: ['Stock Options', 'Corsi Formazione'],
-            status: CandidateStatus.HIRED,
-            createdAt: Date.now(),
-            comments: []
-        },
-        {
-            id: 'c4',
-            fullName: 'Francesca Neri',
-            email: 'francesca.neri@example.com',
-            phone: '+39 338 1122334',
-            age: 31,
-            skills: ['Sales', 'Negoziazione', 'CRM', 'B2B', 'Cold Calling'],
-            summary: 'Sales Account Manager con comprovata esperienza nel superamento dei target di vendita nel settore IT.',
-            currentCompany: 'SalesForce Solutions',
-            currentRole: 'Account Executive',
-            currentSalary: '42k + Bonus',
-            benefits: ['Auto Aziendale', 'Bonus Trimestrali', 'iPhone'],
-            status: CandidateStatus.CANDIDATE,
-            createdAt: Date.now(),
-            comments: []
-        },
-        {
-            id: 'c5',
-            fullName: 'Luca Blu',
-            email: 'luca.blu@example.com',
-            phone: '+39 340 5566778',
-            age: 23,
-            skills: ['HTML', 'CSS', 'JavaScript', 'React Basic'],
-            summary: 'Junior Developer motivato con buone basi accademiche e voglia di imparare le moderne tecnologie web.',
-            currentCompany: 'Freelance',
-            currentRole: 'Web Developer Jr',
-            currentSalary: '22k',
-            benefits: [],
-            status: CandidateStatus.CANDIDATE,
-            createdAt: Date.now(),
-            comments: []
-        }
-    ];
-
-    const defaultScorecard: ScorecardSchema = {
-        categories: [
-            {
-                id: 'cat_tech', name: 'Competenze Tecniche', items: [
-                    { id: 'tech_1', label: 'Conoscenza Strumenti', description: 'Valuta la padronanza degli strumenti richiesti per il ruolo.' },
-                    { id: 'tech_2', label: 'Problem Solving', description: 'Capacità di risolvere problemi complessi in autonomia.' }
-                ]
-            },
-            {
-                id: 'cat_soft', name: 'Soft Skills', items: [
-                    { id: 'soft_1', label: 'Comunicazione', description: 'Chiarezza nell\'esposizione e capacità di sintesi.' },
-                    { id: 'soft_2', label: 'Team Work', description: 'Attitudine al lavoro di squadra e alla collaborazione.' }
-                ]
-            },
-            {
-                id: 'cat_culture', name: 'Culture Fit', items: [
-                    { id: 'cult_1', label: 'Valori Aziendali', description: 'Allineamento con la mission e i valori dell\'azienda.' },
-                    { id: 'cult_2', label: 'Motivazione', description: 'Interesse genuino per la posizione e l\'azienda.' }
-                ]
-            }
-        ]
+    // --- 1. DATA CREATION (3 CANDIDATES, 2 JOBS, 2 ONBOARDING) ---
+    
+    // Candidates
+    const c1: Candidate = {
+        id: 'c1',
+        fullName: 'Alessandro Rossi',
+        email: 'a.rossi@demo.com',
+        phone: '+39 333 1111111',
+        age: 29,
+        skills: ['React', 'TypeScript', 'Node.js'],
+        summary: 'Sviluppatore Full Stack con esperienza in architetture cloud.',
+        currentCompany: 'Tech Solutions',
+        currentRole: 'Senior Developer',
+        status: CandidateStatus.HIRED,
+        createdAt: Date.now(),
+        comments: []
+    };
+    
+    const c2: Candidate = {
+        id: 'c2',
+        fullName: 'Maria Bianchi',
+        email: 'm.bianchi@demo.com',
+        phone: '+39 333 2222222',
+        age: 34,
+        skills: ['Project Management', 'Agile', 'Scrum'],
+        summary: 'Product Manager esperta nella gestione di team distribuiti.',
+        currentCompany: 'Innovation Hub',
+        currentRole: 'Product Owner',
+        status: CandidateStatus.HIRED,
+        createdAt: Date.now(),
+        comments: []
     };
 
-    // 3 JOBS
-    const mockJobs: JobPosition[] = [
-        {
-            id: 'j1',
-            title: 'Senior Frontend Developer',
-            department: 'Engineering',
-            description: 'Cerchiamo un esperto React per guidare lo sviluppo della nostra nuova dashboard.',
-            requirements: '5+ anni di esperienza, ottima conoscenza di React e TypeScript.',
-            status: 'OPEN',
-            assignedTeamMembers: targetUserId ? [targetUserId] : [],
-            createdAt: Date.now(),
-            scorecardSchema: defaultScorecard
-        },
-        {
-            id: 'j2',
-            title: 'Sales Manager',
-            department: 'Sales',
-            description: 'Responsabile vendite per il mercato Enterprise.',
-            requirements: 'Esperienza comprovata B2B, doti di negoziazione.',
-            status: 'OPEN',
-            assignedTeamMembers: targetUserId ? [targetUserId] : [],
-            createdAt: Date.now(),
-            scorecardSchema: defaultScorecard
-        },
-        {
-            id: 'j3',
-            title: 'Product Owner',
-            department: 'Product',
-            description: 'Responsabile della roadmap di prodotto per il Q3/Q4.',
-            requirements: 'Esperienza pregressa in aziende SaaS B2B.',
-            status: 'OPEN',
-            assignedTeamMembers: targetUserId ? [targetUserId] : [],
-            createdAt: Date.now(),
-            scorecardSchema: defaultScorecard
-        }
-    ];
+    const c3: Candidate = {
+        id: 'c3',
+        fullName: 'Luca Verdi',
+        email: 'l.verdi@demo.com',
+        phone: '+39 333 3333333',
+        age: 24,
+        skills: ['Python', 'Data Science', 'SQL'],
+        summary: 'Data Analyst junior con forte passione per il machine learning.',
+        currentCompany: 'University Lab',
+        currentRole: 'Researcher',
+        status: CandidateStatus.CANDIDATE,
+        createdAt: Date.now(),
+        comments: []
+    };
 
-    const mockApplications: Application[] = [
-        // Applications for J1 (Frontend)
-        {
-            id: 'a1',
-            candidateId: 'c1', // Giulia
-            jobId: 'j1',
-            status: SelectionStatus.FIRST_INTERVIEW,
-            rating: 5,
-            priority: 'HIGH',
-            aiScore: 92,
-            aiReasoning: "Profilo eccellente, stack tecnologico perfettamente allineato.",
-            updatedAt: Date.now()
-        },
-        {
-            id: 'a5',
-            candidateId: 'c5', // Luca
-            jobId: 'j1',
-            status: SelectionStatus.TO_ANALYZE,
-            rating: 3,
-            priority: 'LOW',
-            aiScore: 65,
-            updatedAt: Date.now()
-        },
+    const candidates = [c1, c2, c3];
 
-        // Applications for J2 (Sales)
-        {
-            id: 'a4',
-            candidateId: 'c4', // Francesca
-            jobId: 'j2',
-            status: SelectionStatus.SECOND_INTERVIEW,
-            rating: 4,
-            priority: 'HIGH',
-            aiScore: 88,
-            updatedAt: Date.now(),
-            scorecardResults: {
-                'soft_1': 5, 'soft_2': 4, 'soft_3': 3,
-                'sales_1': 5, 'sales_2': 4, 'sales_3': 5
-            }
-        },
-        {
-            id: 'a6', // Using C2 (Marco) as a secondary applicant for Sales just to compare
-            candidateId: 'c2',
-            jobId: 'j2',
-            status: SelectionStatus.FIRST_INTERVIEW,
-            rating: 3,
-            priority: 'MEDIUM',
-            aiScore: 70,
-            updatedAt: Date.now(),
-            scorecardResults: {
-                'soft_1': 3, 'soft_2': 5, 'soft_3': 4,
-                'sales_1': 2, 'sales_2': 3, 'sales_3': 2
-            }
-        },
+    // Jobs
+    const j1: JobPosition = {
+        id: 'j1',
+        title: 'Senior Frontend Engineer',
+        department: 'Engineering',
+        description: 'Cerchiamo un esperto React per guidare lo sviluppo frontend.',
+        requirements: '5+ anni esperienza, React, TypeScript.',
+        status: 'OPEN',
+        assignedTeamMembers: [targetUserId],
+        createdAt: Date.now()
+    };
 
-        // Applications for J3 (Product)
-        {
-            id: 'a2',
-            candidateId: 'c2', // Marco
-            jobId: 'j3',
-            status: SelectionStatus.FIRST_INTERVIEW,
-            aiScore: 85,
-            aiReasoning: "Il profilo combacia molto bene con i requisiti di gestione Agile richiesti.",
-            rating: 5,
-            priority: 'HIGH',
-            updatedAt: Date.now()
-        },
-        {
-            id: 'a3',
-            candidateId: 'c3', // Alessandro
-            jobId: 'j3',
-            status: SelectionStatus.HIRED, // Already hired here
-            rating: 5,
-            priority: 'HIGH',
-            updatedAt: Date.now()
-        }
-    ];
+    const j2: JobPosition = {
+        id: 'j2',
+        title: 'Product Manager',
+        department: 'Product',
+        description: 'Responsabile della roadmap di prodotto.',
+        requirements: 'Esperienza in SaaS B2B.',
+        status: 'OPEN',
+        assignedTeamMembers: [targetUserId],
+        createdAt: Date.now()
+    };
 
+    const jobs = [j1, j2];
+
+    // Applications (Linking Candidates to Jobs)
+    const a1: Application = {
+        id: 'a1',
+        candidateId: c1.id,
+        jobId: j1.id,
+        status: SelectionStatus.HIRED,
+        aiScore: 92,
+        rating: 5,
+        priority: 'HIGH',
+        updatedAt: Date.now()
+    };
+
+    const a2: Application = {
+        id: 'a2',
+        candidateId: c2.id,
+        jobId: j2.id,
+        status: SelectionStatus.HIRED,
+        aiScore: 88,
+        rating: 4,
+        priority: 'MEDIUM',
+        updatedAt: Date.now()
+    };
+
+    const a3: Application = {
+        id: 'a3',
+        candidateId: c3.id,
+        jobId: j1.id,
+        status: SelectionStatus.FIRST_INTERVIEW,
+        aiScore: 75,
+        rating: 3,
+        priority: 'LOW',
+        updatedAt: Date.now()
+    };
+
+    const applications = [a1, a2, a3];
+
+    // Onboarding Processes
+    const o1: OnboardingProcess = {
+        id: 'o1',
+        candidateId: c1.id,
+        jobId: j1.id,
+        status: 'IN_PROGRESS',
+        startDate: Date.now(),
+        tasks: [
+            { id: 't1', description: 'Firma Contratto', department: 'HR', phase: OnboardingPhase.PRE_BOARDING, isCompleted: true },
+            { id: 't2', description: 'Setup PC', department: 'IT', phase: OnboardingPhase.DAY_1, isCompleted: false },
+            { id: 't3', description: 'Pranzo Team', department: 'TEAM', phase: OnboardingPhase.DAY_1, isCompleted: false }
+        ],
+        comments: []
+    };
+
+    const o2: OnboardingProcess = {
+        id: 'o2',
+        candidateId: c2.id,
+        jobId: j2.id,
+        status: 'TO_START',
+        startDate: Date.now() + 86400000 * 7, // Next week
+        tasks: [
+            { id: 't4', description: 'Invio Documenti', department: 'HR', phase: OnboardingPhase.PRE_BOARDING, isCompleted: false },
+            { id: 't5', description: 'Accesso Software', department: 'IT', phase: OnboardingPhase.PRE_BOARDING, isCompleted: false }
+        ],
+        comments: []
+    };
+
+    const onboarding = [o1, o2];
+
+    const companyInfo: CompanyInfo = {
+        name: 'Demo Corp',
+        industry: 'Software',
+        description: 'Azienda leader nel settore software.',
+        productsServices: 'SaaS Platform'
+    };
+
+    // --- 2. SAVE LOGIC (DB OR LOCAL) ---
+    
     if (db) {
         try {
             const batch = writeBatch(db);
-            mockCandidates.forEach(c => batch.set(doc(db, 'candidates', c.id), sanitizeForFirestore(c)));
-            mockJobs.forEach(j => batch.set(doc(db, 'jobs', j.id), sanitizeForFirestore(j)));
-            mockApplications.forEach(a => batch.set(doc(db, 'applications', a.id), sanitizeForFirestore(a)));
+            
+            // Save Company Info
+            batch.set(doc(db, 'settings', 'company'), sanitizeForFirestore(companyInfo));
+
+            candidates.forEach(c => batch.set(doc(db, 'candidates', c.id), sanitizeForFirestore(c)));
+            jobs.forEach(j => batch.set(doc(db, 'jobs', j.id), sanitizeForFirestore(j)));
+            applications.forEach(a => batch.set(doc(db, 'applications', a.id), sanitizeForFirestore(a)));
+            onboarding.forEach(o => batch.set(doc(db, 'onboarding', o.id), sanitizeForFirestore(o)));
+            
             await batch.commit();
-            console.log("Seed completed successfully for user:", targetUserId);
+            console.log("Cloud Seed Completed");
         } catch (e: any) {
-            console.error("Seed error", e);
-            throw new Error("Errore Cloud: " + e.message);
+            console.error("Cloud Seed Error", e);
+            throw e;
         }
     } else {
+        // Local Storage
         const demoState: AppState = {
-            candidates: mockCandidates,
-            jobs: mockJobs,
-            applications: mockApplications,
-            onboarding: [],
-            companyInfo: defaultState.companyInfo
+            candidates,
+            jobs,
+            applications,
+            onboarding,
+            companyInfo
         };
         saveLocalData(demoState);
         window.dispatchEvent(new Event('talentflow-local-update'));
-        console.log("Seed completed locally");
+        console.log("Local Seed Completed");
     }
 };

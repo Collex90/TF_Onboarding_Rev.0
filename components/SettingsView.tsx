@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Database, RefreshCw, AlertTriangle, Cloud, Save, Trash2, Check, Download, Upload, HardDrive, Loader2, Users, History, RotateCcw, UploadCloud, Building2, ShieldCheck, FileText } from 'lucide-react';
 import { seedDatabase, getFullDatabase, restoreDatabase, getAllUsers, updateUserRole, getCloudBackups, restoreFromCloud, getDeletedItems, restoreDeletedItem, uploadBackupToCloud, getCompanyInfo, updateCompanyInfo, getBackupDownloadUrl } from '../services/storage';
-import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig } from '../services/firebase';
+import { getStoredFirebaseConfig, saveFirebaseConfig, removeFirebaseConfig, FirebaseConfig, db } from '../services/firebase';
 import { AppState, User, UserRole, BackupMetadata, DeletedItem, CompanyInfo } from '../types';
 
 interface SettingsViewProps {
@@ -157,20 +157,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ refreshData, onNavig
     };
     
     const handleLoadDemoData = async () => {
-        if(confirm("Questa operazione aggiungerà candidati e posizioni di prova. Vuoi procedere?")) {
-            setIsLoadingDemo(true);
-            try {
-                // Explicitly pass current user ID to ensure visibility of created jobs
-                await seedDatabase(currentUser?.uid);
-                setTimeout(() => {
-                    setIsLoadingDemo(false);
-                    onNavigate('recruitment');
-                }, 1000);
-            } catch (e: any) {
-                console.error(e);
+        // Direct execution without confirm dialog to avoid issues in embedded environments
+        setIsLoadingDemo(true);
+        try {
+            // Explicitly pass current user ID to ensure visibility of created jobs
+            await seedDatabase(currentUser?.uid);
+            
+            // Artificial delay for UX
+            setTimeout(() => {
                 setIsLoadingDemo(false);
-                alert("ERRORE: " + e.message + "\n\nSuggerimento: Controlla che le Regole di Sicurezza su Firebase permettano la scrittura.");
-            }
+                // FORCE RELOAD IN LOCAL MODE TO ENSURE DATA VISIBILITY
+                if (!db) {
+                    window.location.reload();
+                } else {
+                    onNavigate('recruitment');
+                    refreshData();
+                }
+            }, 800);
+        } catch (e: any) {
+            console.error(e);
+            setIsLoadingDemo(false);
+            alert("ERRORE GENERAZIONE DATI: " + e.message);
         }
     };
 

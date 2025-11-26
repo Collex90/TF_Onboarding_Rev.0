@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LayoutDashboard, ArrowRight, AlertCircle, UserPlus, LogIn } from 'lucide-react';
 import { User } from '../types';
@@ -56,6 +55,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, isCloudConfigured
                     const capitalizedName = demoName.charAt(0).toUpperCase() + demoName.slice(1);
                     
                     const user: User = {
+                        uid: 'local-admin', // UID fisso per ambiente demo/locale
                         name: capitalizedName || 'Utente Demo',
                         email: email,
                         role: 'ADMIN', // In locale sei sempre admin
