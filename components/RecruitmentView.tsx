@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
-import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info, RefreshCw, PieChart, TrendingUp } from 'lucide-react';
+import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info, RefreshCw, PieChart, TrendingUp, Check } from 'lucide-react';
 import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, addCandidateAttachment, deleteCandidateAttachment, deleteJob } from '../services/storage';
 import { evaluateFit, generateJobDetails, generateScorecardSchema } from '../services/ai';
 
@@ -18,6 +18,14 @@ const getFileIcon = (mimeType: string) => {
     if (mimeType.includes('sheet') || mimeType.includes('excel')) return <Table size={16} className="text-green-600"/>;
     if (mimeType.includes('image')) return <Image size={16} className="text-purple-500"/>;
     return <FileText size={16} className="text-indigo-500"/>;
+};
+
+// Job Status Configuration for UI
+const JOB_STATUS_CONFIG: Record<string, { label: string, color: string, dot: string }> = {
+    'OPEN': { label: 'APERTA', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100', dot: 'bg-green-500' },
+    'SUSPENDED': { label: 'SOSPESA', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100', dot: 'bg-orange-500' },
+    'COMPLETED': { label: 'COMPLETATA', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100', dot: 'bg-blue-500' },
+    'CLOSED': { label: 'CHIUSA', color: 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100', dot: 'bg-gray-500' }
 };
 
 export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshData, currentUser, onUpload }) => {
@@ -83,6 +91,9 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
     // KANBAN DRAG STATE
     const [dragOverColumn, setDragOverColumn] = useState<SelectionStatus | null>(null);
+
+    // CUSTOM DROPDOWN STATE
+    const [isJobStatusDropdownOpen, setIsJobStatusDropdownOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -886,45 +897,64 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
                 {/* JOB INFO QUICK VIEW OVERLAY - MOVED TO END TO RENDER OVER EVERYTHING */}
                 {viewingJobInfoId && jobInfoTarget && (
-                    <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => setViewingJobInfoId(null)}>
+                    <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }}>
                         <div className="bg-white h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-                            <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-start">
+                            <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-start shrink-0 relative z-50">
                                 <div>
                                     <h3 className="text-xl font-bold text-gray-900 mb-2">{jobInfoTarget.title}</h3>
                                     <div className="flex items-center gap-3 text-sm">
                                         <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-medium">{jobInfoTarget.department}</span>
+                                        
                                         {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) ? (
-                                            <select
-                                                value={jobInfoTarget.status}
-                                                onChange={async (e) => {
-                                                    await updateJob({ ...jobInfoTarget, status: e.target.value as any });
-                                                    refreshData();
-                                                }}
-                                                className={`text-xs font-bold px-2 py-1 rounded-full border outline-none cursor-pointer ${
-                                                    jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' :
-                                                    jobInfoTarget.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
-                                                    'bg-gray-100 text-gray-700'
-                                                }`}
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <option value="OPEN">APERTA</option>
-                                                <option value="SUSPENDED">SOSPESA</option>
-                                                <option value="COMPLETED">COMPLETATA</option>
-                                                <option value="CLOSED">CHIUSA</option>
-                                            </select>
+                                            <div className="relative">
+                                                <button 
+                                                    onClick={() => setIsJobStatusDropdownOpen(!isJobStatusDropdownOpen)}
+                                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs border transition-all duration-200 ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.color || 'bg-gray-100 border-gray-200 text-gray-700'}`}
+                                                >
+                                                    <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-gray-400'}`}></span>
+                                                    {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
+                                                    <ChevronDown size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
+                                                </button>
+
+                                                {/* CUSTOM DROPDOWN MENU */}
+                                                {isJobStatusDropdownOpen && (
+                                                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden animate-in slide-in-from-top-2 z-[100]">
+                                                        <div className="p-1">
+                                                            {Object.entries(JOB_STATUS_CONFIG).map(([key, config]) => (
+                                                                <button
+                                                                    key={key}
+                                                                    onClick={async () => {
+                                                                        await updateJob({ ...jobInfoTarget, status: key as any });
+                                                                        refreshData();
+                                                                        setIsJobStatusDropdownOpen(false);
+                                                                    }}
+                                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-gray-50 transition-colors ${jobInfoTarget.status === key ? 'bg-gray-50 text-gray-900' : 'text-gray-600'}`}
+                                                                >
+                                                                    <span className={`w-2 h-2 rounded-full ${config.dot}`}></span>
+                                                                    {config.label}
+                                                                    {jobInfoTarget.status === key && <Check size={14} className="ml-auto text-indigo-600"/>}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         ) : (
-                                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{jobInfoTarget.status}</span>
+                                            <span className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-2 border ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.color || 'bg-gray-100 border-gray-200 text-gray-700'}`}>
+                                                <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-gray-400'}`}></span>
+                                                {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
+                                            </span>
                                         )}
                                     </div>
                                 </div>
-                                <button onClick={() => setViewingJobInfoId(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                                <button onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                             </div>
                             
                             {/* ADDED EDIT BUTTON IN QUICK VIEW */}
                             {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
                                 <div className="px-6 pt-4">
                                     <button 
-                                        onClick={() => { setViewingJobInfoId(null); openEditJobModal(jobInfoTarget); }}
+                                        onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); openEditJobModal(jobInfoTarget); }}
                                         className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors"
                                     >
                                         <Edit size={16} /> Modifica Dati Posizione
@@ -1156,45 +1186,63 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
             {/* JOB INFO QUICK VIEW OVERLAY */}
             {viewingJobInfoId && jobInfoTarget && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => setViewingJobInfoId(null)}>
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }}>
                     <div className="bg-white h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-                        <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-start">
+                        <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-start shrink-0 relative z-50">
                              <div>
                                 <h3 className="text-xl font-bold text-gray-900 mb-2">{jobInfoTarget.title}</h3>
                                 <div className="flex items-center gap-3 text-sm">
                                     <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-medium">{jobInfoTarget.department}</span>
                                     {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) ? (
-                                        <select
-                                            value={jobInfoTarget.status}
-                                            onChange={async (e) => {
-                                                await updateJob({ ...jobInfoTarget, status: e.target.value as any });
-                                                refreshData();
-                                            }}
-                                            className={`text-xs font-bold px-2 py-1 rounded-full border outline-none cursor-pointer ${
-                                                jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' :
-                                                jobInfoTarget.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
-                                                'bg-gray-100 text-gray-700'
-                                            }`}
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            <option value="OPEN">APERTA</option>
-                                            <option value="SUSPENDED">SOSPESA</option>
-                                            <option value="COMPLETED">COMPLETATA</option>
-                                            <option value="CLOSED">CHIUSA</option>
-                                        </select>
+                                        <div className="relative">
+                                            <button 
+                                                onClick={() => setIsJobStatusDropdownOpen(!isJobStatusDropdownOpen)}
+                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs border transition-all duration-200 ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.color || 'bg-gray-100 border-gray-200 text-gray-700'}`}
+                                            >
+                                                <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-gray-400'}`}></span>
+                                                {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
+                                                <ChevronDown size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
+                                            </button>
+
+                                            {/* CUSTOM DROPDOWN MENU */}
+                                            {isJobStatusDropdownOpen && (
+                                                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden animate-in slide-in-from-top-2 z-[100]">
+                                                    <div className="p-1">
+                                                        {Object.entries(JOB_STATUS_CONFIG).map(([key, config]) => (
+                                                            <button
+                                                                key={key}
+                                                                onClick={async () => {
+                                                                    await updateJob({ ...jobInfoTarget, status: key as any });
+                                                                    refreshData();
+                                                                    setIsJobStatusDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-gray-50 transition-colors ${jobInfoTarget.status === key ? 'bg-gray-50 text-gray-900' : 'text-gray-600'}`}
+                                                            >
+                                                                <span className={`w-2 h-2 rounded-full ${config.dot}`}></span>
+                                                                {config.label}
+                                                                {jobInfoTarget.status === key && <Check size={14} className="ml-auto text-indigo-600"/>}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     ) : (
-                                        <span className={`text-xs px-2 py-1 rounded-full font-bold ${jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{jobInfoTarget.status}</span>
+                                        <span className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-2 border ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.color || 'bg-gray-100 border-gray-200 text-gray-700'}`}>
+                                            <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-gray-400'}`}></span>
+                                            {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
+                                        </span>
                                     )}
                                 </div>
                             </div>
-                            <button onClick={() => setViewingJobInfoId(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                            <button onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                         </div>
                         
                         {/* ADDED EDIT BUTTON IN QUICK VIEW */}
                         {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
                             <div className="px-6 pt-4">
                                 <button 
-                                    onClick={() => { setViewingJobInfoId(null); openEditJobModal(jobInfoTarget); }}
+                                    onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); openEditJobModal(jobInfoTarget); }}
                                     className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors"
                                 >
                                     <Edit size={16} /> Modifica Dati Posizione
