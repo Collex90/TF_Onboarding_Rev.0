@@ -893,7 +893,28 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     <h3 className="text-xl font-bold text-gray-900 mb-2">{jobInfoTarget.title}</h3>
                                     <div className="flex items-center gap-3 text-sm">
                                         <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-medium">{jobInfoTarget.department}</span>
-                                        <span className={`text-xs px-2 py-1 rounded-full font-bold ${jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{jobInfoTarget.status}</span>
+                                        {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) ? (
+                                            <select
+                                                value={jobInfoTarget.status}
+                                                onChange={async (e) => {
+                                                    await updateJob({ ...jobInfoTarget, status: e.target.value as any });
+                                                    refreshData();
+                                                }}
+                                                className={`text-xs font-bold px-2 py-1 rounded-full border outline-none cursor-pointer ${
+                                                    jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' :
+                                                    jobInfoTarget.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
+                                                    'bg-gray-100 text-gray-700'
+                                                }`}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <option value="OPEN">APERTA</option>
+                                                <option value="SUSPENDED">SOSPESA</option>
+                                                <option value="COMPLETED">COMPLETATA</option>
+                                                <option value="CLOSED">CHIUSA</option>
+                                            </select>
+                                        ) : (
+                                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{jobInfoTarget.status}</span>
+                                        )}
                                     </div>
                                 </div>
                                 <button onClick={() => setViewingJobInfoId(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
@@ -938,12 +959,17 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         </div>
                                     </div>
                                     <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
-                                        <span className="text-xs font-bold text-yellow-700 uppercase">Media Rating</span>
+                                        <span className="text-xs font-bold text-yellow-700 uppercase">Media Score</span>
                                         <div className="text-2xl font-bold text-yellow-900 mt-1 flex items-center gap-1">
-                                            <Star size={18} fill="currentColor"/>
+                                            <Ruler size={18}/>
                                             {(
-                                                data.applications.filter(a => a.jobId === jobInfoTarget.id && a.rating).reduce((acc, curr) => acc + (curr.rating || 0), 0) / 
-                                                (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.rating).length || 1)
+                                                data.applications
+                                                    .filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults)
+                                                    .reduce((acc, curr) => {
+                                                        const appTotal = Object.values(curr.scorecardResults || {}).reduce((sum: number, v: number) => sum + v, 0);
+                                                        return acc + appTotal;
+                                                    }, 0) /
+                                                (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults).length || 1)
                                             ).toFixed(1)}
                                         </div>
                                     </div>
@@ -1137,7 +1163,28 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 <h3 className="text-xl font-bold text-gray-900 mb-2">{jobInfoTarget.title}</h3>
                                 <div className="flex items-center gap-3 text-sm">
                                     <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-gray-600 font-medium">{jobInfoTarget.department}</span>
-                                    <span className={`text-xs px-2 py-1 rounded-full font-bold ${jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{jobInfoTarget.status}</span>
+                                    {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) ? (
+                                        <select
+                                            value={jobInfoTarget.status}
+                                            onChange={async (e) => {
+                                                await updateJob({ ...jobInfoTarget, status: e.target.value as any });
+                                                refreshData();
+                                            }}
+                                            className={`text-xs font-bold px-2 py-1 rounded-full border outline-none cursor-pointer ${
+                                                jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' :
+                                                jobInfoTarget.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' :
+                                                'bg-gray-100 text-gray-700'
+                                            }`}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <option value="OPEN">APERTA</option>
+                                            <option value="SUSPENDED">SOSPESA</option>
+                                            <option value="COMPLETED">COMPLETATA</option>
+                                            <option value="CLOSED">CHIUSA</option>
+                                        </select>
+                                    ) : (
+                                        <span className={`text-xs px-2 py-1 rounded-full font-bold ${jobInfoTarget.status === 'OPEN' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{jobInfoTarget.status}</span>
+                                    )}
                                 </div>
                             </div>
                             <button onClick={() => setViewingJobInfoId(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
@@ -1182,12 +1229,17 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     </div>
                                 </div>
                                 <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
-                                    <span className="text-xs font-bold text-yellow-700 uppercase">Media Rating</span>
+                                    <span className="text-xs font-bold text-yellow-700 uppercase">Media Score</span>
                                     <div className="text-2xl font-bold text-yellow-900 mt-1 flex items-center gap-1">
-                                        <Star size={18} fill="currentColor"/>
+                                        <Ruler size={18}/>
                                         {(
-                                            data.applications.filter(a => a.jobId === jobInfoTarget.id && a.rating).reduce((acc, curr) => acc + (curr.rating || 0), 0) / 
-                                            (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.rating).length || 1)
+                                            data.applications
+                                                .filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults)
+                                                .reduce((acc, curr) => {
+                                                    const appTotal = Object.values(curr.scorecardResults || {}).reduce((sum: number, v: number) => sum + v, 0);
+                                                    return acc + appTotal;
+                                                }, 0) /
+                                            (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults).length || 1)
                                         ).toFixed(1)}
                                     </div>
                                 </div>
@@ -1470,8 +1522,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
             {/* ... other modals (Email, Rejection, Associate, Matrix, PhotoZoom) ... */}
             {/* EMAIL MODAL */}
             {isEmailModalOpen && (
