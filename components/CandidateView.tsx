@@ -80,10 +80,10 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
     
     // Multi-select
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set<string>());
 
     // Delete State
-    const [deleteCandidateIds, setDeleteCandidateIds] = useState<Set<string>>(new Set());
+    const [deleteCandidateIds, setDeleteCandidateIds] = useState<Set<string>>(new Set<string>());
     const [isDeleting, setIsDeleting] = useState(false);
 
     // Onboarding Setup
@@ -256,7 +256,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         if (deleteCandidateIds.size === 0) return;
         setIsDeleting(true);
         try {
-            const promises = Array.from(deleteCandidateIds).map(id => deleteCandidate(id));
+            const promises = Array.from(deleteCandidateIds).map((id: string) => deleteCandidate(id));
             await Promise.all(promises);
             refreshData();
             setViewingCandidate(null);
@@ -275,7 +275,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     const handleBulkStatusChange = async (status: CandidateStatus) => {
         if (selectedIds.size === 0) return;
         try {
-            const promises = Array.from(selectedIds).map(id => {
+            const promises = Array.from(selectedIds).map((id: string) => {
                 const candidate = candidates.find(c => c.id === id);
                 if (candidate) {
                     return updateCandidate({ ...candidate, status });

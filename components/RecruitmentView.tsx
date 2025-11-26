@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
-import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info } from 'lucide-react';
+import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info, RefreshCw, PieChart, TrendingUp } from 'lucide-react';
 import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, addCandidateAttachment, deleteCandidateAttachment, deleteJob } from '../services/storage';
 import { evaluateFit, generateJobDetails, generateScorecardSchema } from '../services/ai';
 
@@ -58,6 +59,10 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const [isGeneratingScorecard, setIsGeneratingScorecard] = useState(false);
     const [availableUsers, setAvailableUsers] = useState<User[]>([]);
     const [assignedTeamMembers, setAssignedTeamMembers] = useState<string[]>([]);
+    
+    // NEW: BACKGROUND PROCESSING STATE
+    const [processingJobs, setProcessingJobs] = useState<Set<string>>(new Set()); // Tracks jobs doing AI updates in background
+    const [isRecalculating, setIsRecalculating] = useState(false); // Keep for local modal usage if needed
 
     // SCORECARD TEMPLATES STATE (Management)
     const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
@@ -76,9 +81,13 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const [isMatrixCandidateFilterOpen, setIsMatrixCandidateFilterOpen] = useState(false);
     const [matrixStatusFilter, setMatrixStatusFilter] = useState<SelectionStatus[]>([]);
 
+    // KANBAN DRAG STATE
+    const [dragOverColumn, setDragOverColumn] = useState<SelectionStatus | null>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const isMounted = useRef(true);
 
     // Helper to get the job object for the info modal
     const jobInfoTarget = useMemo(() => {
@@ -88,9 +97,11 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
     // Autofocus on search input when component mounts
     useEffect(() => {
+        isMounted.current = true;
         if (!selectedJobId) {
             searchInputRef.current?.focus();
         }
+        return () => { isMounted.current = false; };
     }, [selectedJobId]);
 
     useEffect(() => {
@@ -167,18 +178,75 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const handleDeleteItem = (catId: string, itemId: string) => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: (prev.scorecardSchema?.categories || []).map(c => c.id === catId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c) } })); };
     const handleUpdateItemLabel = (catId: string, itemId: string, newLabel: string) => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: (prev.scorecardSchema?.categories || []).map(c => c.id === catId ? { ...c, items: c.items.map(i => i.id === itemId ? { ...i, label: newLabel } : i) } : c) } })); };
 
-    const handleSaveJob = (e: React.FormEvent) => {
+    // --- BACKGROUND AI PROCESSOR ---
+    const runBackgroundFitUpdate = async (jobId: string, updatedJob: JobPosition) => {
+        setProcessingJobs(prev => new Set(prev).add(jobId));
+        
+        // Find applications in current data snapshot (might be slightly stale but ok for IDs)
+        const jobApps = data.applications.filter(a => a.jobId === jobId);
+        
+        console.log(`[AI Background] Starting update for job ${jobId}, candidates: ${jobApps.length}`);
+
+        for (const app of jobApps) {
+            if (!isMounted.current) break; // Stop if component unmounts
+            
+            const candidate = data.candidates.find(c => c.id === app.candidateId);
+            if (candidate) {
+                try {
+                    const fit = await evaluateFit(candidate, updatedJob, data.companyInfo);
+                    await updateApplicationAiScore(app.id, fit.score, fit.reasoning);
+                } catch (e) {
+                    console.error(`[AI Background] Failed for app ${app.id}`, e);
+                }
+            }
+            // Small delay to yield to UI
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        if (isMounted.current) {
+            setProcessingJobs(prev => {
+                const next = new Set(prev);
+                next.delete(jobId);
+                return next;
+            });
+            refreshData(); // Refresh UI once done
+        }
+    };
+
+    const handleSaveJob = async (e: React.FormEvent) => {
         e.preventDefault();
         const commonData = { ...jobForm, assignedTeamMembers: assignedTeamMembers };
-        if (editingJobId) {
-            const updatedJob: JobPosition = { ...data.jobs.find(j => j.id === editingJobId)!, ...commonData };
-            updateJob(updatedJob);
-        } else {
-            const newJob: JobPosition = { id: generateId(), ...commonData, createdAt: Date.now() };
-            addJob(newJob);
+        
+        try {
+            if (editingJobId) {
+                const oldJob = data.jobs.find(j => j.id === editingJobId);
+                const updatedJob: JobPosition = { ...oldJob!, ...commonData };
+                
+                const contentChanged = oldJob && (
+                    oldJob.description !== jobForm.description || 
+                    oldJob.requirements !== jobForm.requirements || 
+                    oldJob.title !== jobForm.title
+                );
+
+                await updateJob(updatedJob);
+                setIsJobModalOpen(false); // Close immediately
+
+                if (contentChanged) {
+                    // Run detached background process
+                    runBackgroundFitUpdate(editingJobId, updatedJob);
+                }
+                refreshData();
+
+            } else {
+                const newJob: JobPosition = { id: generateId(), ...commonData, createdAt: Date.now() };
+                await addJob(newJob);
+                setIsJobModalOpen(false);
+                refreshData();
+            }
+        } catch (err) {
+            console.error("Error saving job:", err);
+            alert("Errore durante il salvataggio.");
         }
-        refreshData();
-        setIsJobModalOpen(false);
     };
 
     const handleGenerateJobAI = async () => { 
@@ -277,13 +345,42 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
             // PASS COMPANY CONTEXT
             const result = await evaluateFit(candidate, job, data.companyInfo); 
             updateApplicationAiScore(appId, result.score, result.reasoning); 
+            if (viewingApp && viewingApp.app.id === appId) {
+                setViewingApp(prev => prev ? { ...prev, app: { ...prev.app, aiScore: result.score, aiReasoning: result.reasoning } } : null);
+            }
             refreshData(); 
         } catch (e) { alert("Errore valutazione AI: " + e); } finally { setEvaluatingId(null); } 
     };
+
+    const handleRecalculateSingleFit = async () => {
+        if (!viewingApp) return;
+        handleEvaluate(viewingApp.app.id, viewingApp.candidate.id);
+    };
     
     const handleDragStart = (e: React.DragEvent, appId: string) => { setDraggedAppId(appId); e.dataTransfer.effectAllowed = 'move'; };
-    const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
-    const handleDrop = (e: React.DragEvent, status: SelectionStatus) => { e.preventDefault(); if (draggedAppId) { if (status === SelectionStatus.REJECTED) { setPendingRejection({ appId: draggedAppId, status }); } else { updateApplicationStatus(draggedAppId, status); refreshData(); } setDraggedAppId(null); } };
+    // MODIFIED DRAG HANDLERS FOR BETTER VISUALS
+    const handleDragOver = (e: React.DragEvent, status: SelectionStatus) => { 
+        e.preventDefault(); 
+        e.dataTransfer.dropEffect = 'move'; 
+        if (dragOverColumn !== status) setDragOverColumn(status);
+    };
+    const handleDragLeave = (e: React.DragEvent) => {
+        // Only clear if leaving the column entirely (optional logic could be added here)
+    };
+    const handleDrop = (e: React.DragEvent, status: SelectionStatus) => { 
+        e.preventDefault(); 
+        setDragOverColumn(null);
+        if (draggedAppId) { 
+            if (status === SelectionStatus.REJECTED) { 
+                setPendingRejection({ appId: draggedAppId, status }); 
+            } else { 
+                updateApplicationStatus(draggedAppId, status); 
+                refreshData(); 
+            } 
+            setDraggedAppId(null); 
+        } 
+    };
+
     const confirmRejection = () => { if (pendingRejection) { updateApplicationStatus(pendingRejection.appId, pendingRejection.status, rejectionReason, rejectionNotes); refreshData(); setPendingRejection(null); setRejectionReason('Soft Skill'); setRejectionNotes(''); if (viewingApp?.app.id === pendingRejection.appId) { setViewingApp(null); } } };
     const cancelRejection = () => { setPendingRejection(null); setRejectionReason('Soft Skill'); setRejectionNotes(''); };
     
@@ -523,9 +620,15 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         const priorityVal = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
         const appsInStatus = applicationsForJob.filter(a => a.status === status).sort((a, b) => { const ratingDiff = (b.rating || 0) - (a.rating || 0); if (ratingDiff !== 0) return ratingDiff; const pA = priorityVal[a.priority || 'LOW'] || 0; const pB = priorityVal[b.priority || 'LOW'] || 0; const priorityDiff = pB - pA; if (priorityDiff !== 0) return priorityDiff; return b.updatedAt - a.updatedAt; });
         const isRejectedCol = status === SelectionStatus.REJECTED;
+        const isDragOver = dragOverColumn === status;
 
         return (
-            <div className={`min-w-[320px] w-[320px] max-w-[320px] rounded-xl p-4 flex flex-col gap-3 h-full max-h-[calc(100vh-200px)] transition-colors ${isRejectedCol ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, status)}>
+            <div 
+                className={`min-w-[320px] w-[320px] max-w-[320px] rounded-xl p-4 flex flex-col gap-3 h-full max-h-[calc(100vh-200px)] transition-all duration-200 ${isRejectedCol ? 'bg-red-50 border border-red-100' : 'bg-gray-50 border border-gray-100'} ${isDragOver ? 'bg-indigo-100 border-indigo-300 ring-2 ring-indigo-200 shadow-md' : ''}`} 
+                onDragOver={(e) => handleDragOver(e, status)} 
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, status)}
+            >
                 <div className="flex items-center justify-between mb-2 shrink-0">
                     <h4 className={`font-semibold text-sm uppercase tracking-wider ${isRejectedCol ? 'text-red-700' : 'text-gray-700'}`}>{StatusLabels[status]}</h4>
                     <span className={`text-xs px-2 py-1 rounded-full ${isRejectedCol ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-600'}`}>{appsInStatus.length}</span>
@@ -582,11 +685,20 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         const hiredCount = jobApps.filter(a => a.status === SelectionStatus.HIRED).length;
                         const rejectedCount = jobApps.filter(a => a.status === SelectionStatus.REJECTED).length;
                         const isAssigned = job.assignedTeamMembers?.includes(currentUser?.uid || '');
+                        const isProcessing = processingJobs.has(job.id);
+
                         return (
                             <div key={job.id} onClick={() => setSelectedJobId(job.id)} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-indigo-200 hover:shadow-md cursor-pointer transition-all group flex flex-col relative">
                                 {currentUser?.role === UserRole.TEAM && isAssigned && (<div className="absolute top-0 right-0 rounded-bl-xl rounded-tr-xl text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 font-bold flex items-center gap-1 border-b border-l border-indigo-100"><Shield size={10}/> ASSEGNATO</div>)}
                                 <div className="flex justify-between items-start mb-2 pr-20"><h3 className="text-xl font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{job.title}</h3><span className={`text-xs px-2 py-1 rounded-full font-medium ${job.status === 'OPEN' ? 'bg-green-100 text-green-800' : job.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'}`}>{job.status}</span></div>
                                 <p className="text-gray-500 text-sm mb-4">{job.department}</p>
+                                
+                                {isProcessing && (
+                                    <div className="flex items-center gap-2 text-xs text-indigo-600 font-bold bg-indigo-50 p-2 rounded-lg mb-2 animate-pulse border border-indigo-100 w-fit">
+                                        <Loader2 size={12} className="animate-spin"/> Analisi AI in corso (Background)...
+                                    </div>
+                                )}
+
                                 <div className="mt-auto flex justify-between items-center text-sm pt-4 border-t border-gray-50"><div className="flex gap-4 text-xs"><span className="font-bold text-gray-700">{activeCount} <span className="text-gray-400 font-normal">Attivi</span></span><span className="font-bold text-green-700">{hiredCount} <span className="text-gray-400 font-normal">Assunti</span></span><span className="font-bold text-red-700">{rejectedCount} <span className="text-gray-400 font-normal">Scartati</span></span></div>
                                 <div className="flex gap-2">
                                     {/* QUICK INFO BUTTON */}
@@ -668,15 +780,17 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     </div>
                                 </div>
                                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
-                                    <button type="button" onClick={() => setIsJobModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Annulla</button>
-                                    <button type="submit" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm">{editingJobId ? 'Aggiorna' : 'Crea Posizione'}</button>
+                                    <button type="button" onClick={() => setIsJobModalOpen(false)} disabled={isRecalculating} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Annulla</button>
+                                    <button type="submit" disabled={isRecalculating} className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-2">
+                                        {editingJobId ? 'Aggiorna' : 'Crea Posizione'}
+                                    </button>
                                 </div>
                             </form>
                          </div>
                     </div>
                 )}
                 
-                {/* TEMPLATE MANAGER MODALS */}
+                {/* ... TEMPLATE MANAGER MODALS ... */}
                 {isSaveTemplateModalOpen && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm">
                         <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
@@ -784,8 +898,57 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 </div>
                                 <button onClick={() => setViewingJobInfoId(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                             </div>
+                            
+                            {/* ADDED EDIT BUTTON IN QUICK VIEW */}
+                            {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
+                                <div className="px-6 pt-4">
+                                    <button 
+                                        onClick={() => { setViewingJobInfoId(null); openEditJobModal(jobInfoTarget); }}
+                                        className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                                    >
+                                        <Edit size={16} /> Modifica Dati Posizione
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar space-y-6">
                                 
+                                {/* STATS DASHBOARD SECTION (NEW) */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                        <span className="text-xs font-bold text-blue-700 uppercase">Totale Candidati</span>
+                                        <div className="text-2xl font-bold text-blue-900 mt-1">
+                                            {data.applications.filter(a => a.jobId === jobInfoTarget.id).length}
+                                        </div>
+                                    </div>
+                                    <div className="bg-green-50 p-3 rounded-xl border border-green-100">
+                                        <span className="text-xs font-bold text-green-700 uppercase">Assunti</span>
+                                        <div className="text-2xl font-bold text-green-900 mt-1">
+                                            {data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.HIRED).length}
+                                        </div>
+                                    </div>
+                                    <div className="bg-purple-50 p-3 rounded-xl border border-purple-100">
+                                        <span className="text-xs font-bold text-purple-700 uppercase">Media Fit AI</span>
+                                        <div className="text-2xl font-bold text-purple-900 mt-1 flex items-center gap-1">
+                                            <BrainCircuit size={18}/>
+                                            {Math.round(
+                                                data.applications.filter(a => a.jobId === jobInfoTarget.id && a.aiScore).reduce((acc, curr) => acc + (curr.aiScore || 0), 0) / 
+                                                (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.aiScore).length || 1)
+                                            )}%
+                                        </div>
+                                    </div>
+                                    <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
+                                        <span className="text-xs font-bold text-yellow-700 uppercase">Media Rating</span>
+                                        <div className="text-2xl font-bold text-yellow-900 mt-1 flex items-center gap-1">
+                                            <Star size={18} fill="currentColor"/>
+                                            {(
+                                                data.applications.filter(a => a.jobId === jobInfoTarget.id && a.rating).reduce((acc, curr) => acc + (curr.rating || 0), 0) / 
+                                                (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.rating).length || 1)
+                                            ).toFixed(1)}
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* INFO SECTION */}
                                 <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
                                     <div>
@@ -793,8 +956,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         <span className="font-medium text-gray-900">{new Date(jobInfoTarget.createdAt).toLocaleDateString()}</span>
                                     </div>
                                     <div>
-                                        <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Candidati</span>
-                                        <span className="font-medium text-gray-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id).length}</span>
+                                        <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Scartati</span>
+                                        <span className="font-medium text-gray-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.REJECTED).length}</span>
                                     </div>
                                 </div>
 
@@ -979,8 +1142,57 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             </div>
                             <button onClick={() => setViewingJobInfoId(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                         </div>
+                        
+                        {/* ADDED EDIT BUTTON IN QUICK VIEW */}
+                        {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
+                            <div className="px-6 pt-4">
+                                <button 
+                                    onClick={() => { setViewingJobInfoId(null); openEditJobModal(jobInfoTarget); }}
+                                    className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                                >
+                                    <Edit size={16} /> Modifica Dati Posizione
+                                </button>
+                            </div>
+                        )}
+
                         <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar space-y-6">
                             
+                            {/* STATS DASHBOARD SECTION (NEW) */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                    <span className="text-xs font-bold text-blue-700 uppercase">Totale Candidati</span>
+                                    <div className="text-2xl font-bold text-blue-900 mt-1">
+                                        {data.applications.filter(a => a.jobId === jobInfoTarget.id).length}
+                                    </div>
+                                </div>
+                                <div className="bg-green-50 p-3 rounded-xl border border-green-100">
+                                    <span className="text-xs font-bold text-green-700 uppercase">Assunti</span>
+                                    <div className="text-2xl font-bold text-green-900 mt-1">
+                                        {data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.HIRED).length}
+                                    </div>
+                                </div>
+                                <div className="bg-purple-50 p-3 rounded-xl border border-purple-100">
+                                    <span className="text-xs font-bold text-purple-700 uppercase">Media Fit AI</span>
+                                    <div className="text-2xl font-bold text-purple-900 mt-1 flex items-center gap-1">
+                                        <BrainCircuit size={18}/>
+                                        {Math.round(
+                                            data.applications.filter(a => a.jobId === jobInfoTarget.id && a.aiScore).reduce((acc, curr) => acc + (curr.aiScore || 0), 0) / 
+                                            (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.aiScore).length || 1)
+                                        )}%
+                                    </div>
+                                </div>
+                                <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
+                                    <span className="text-xs font-bold text-yellow-700 uppercase">Media Rating</span>
+                                    <div className="text-2xl font-bold text-yellow-900 mt-1 flex items-center gap-1">
+                                        <Star size={18} fill="currentColor"/>
+                                        {(
+                                            data.applications.filter(a => a.jobId === jobInfoTarget.id && a.rating).reduce((acc, curr) => acc + (curr.rating || 0), 0) / 
+                                            (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.rating).length || 1)
+                                        ).toFixed(1)}
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* INFO SECTION */}
                             <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
                                 <div>
@@ -988,8 +1200,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     <span className="font-medium text-gray-900">{new Date(jobInfoTarget.createdAt).toLocaleDateString()}</span>
                                 </div>
                                 <div>
-                                    <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Candidati</span>
-                                    <span className="font-medium text-gray-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id).length}</span>
+                                    <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Scartati</span>
+                                    <span className="font-medium text-gray-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.REJECTED).length}</span>
                                 </div>
                             </div>
 
@@ -1085,8 +1297,23 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                             
                                             {viewingApp.app.aiScore && (
                                                 <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100">
-                                                    <div className="flex justify-between items-center mb-2"><h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><BrainCircuit size={16}/> AI Match Analysis</h4><span className="text-2xl font-bold text-indigo-600">{viewingApp.app.aiScore}%</span></div>
-                                                    <p className="text-sm text-indigo-800 leading-relaxed">{viewingApp.app.aiReasoning}</p>
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><BrainCircuit size={16}/> AI Match Analysis</h4>
+                                                        <div className="flex items-center gap-3">
+                                                            {/* RECALCULATE BUTTON */}
+                                                            <button 
+                                                                onClick={handleRecalculateSingleFit}
+                                                                disabled={!!evaluatingId}
+                                                                className="p-1.5 bg-white rounded-full shadow-sm border border-indigo-200 text-indigo-600 hover:bg-indigo-100 hover:rotate-180 transition-all"
+                                                                title="Ricalcola Match"
+                                                            >
+                                                                {evaluatingId === viewingApp.app.id ? <Loader2 size={14} className="animate-spin"/> : <RefreshCw size={14}/>}
+                                                            </button>
+                                                            <span className="text-2xl font-bold text-indigo-600">{viewingApp.app.aiScore}%</span>
+                                                        </div>
+                                                    </div>
+                                                    {/* ADDED whitespace-pre-wrap FOR BETTER FORMATTING */}
+                                                    <p className="text-sm text-indigo-800 leading-relaxed whitespace-pre-wrap">{viewingApp.app.aiReasoning}</p>
                                                 </div>
                                             )}
 
