@@ -1570,7 +1570,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             </div>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
             {/* ... other modals (Email, Rejection, Associate, Matrix, PhotoZoom) ... */}
             {/* EMAIL MODAL */}
             {isEmailModalOpen && (
