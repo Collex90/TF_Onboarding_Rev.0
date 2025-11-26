@@ -65,8 +65,18 @@ export const parseCV = async (base64Data: string, mimeType: string): Promise<Par
                 ]
             },
             config: {
-                // MODIFIED PROMPT: Strict rules on Skills
-                systemInstruction: "Sei un parser di CV esperto. Estrai i dati in JSON rigoroso. Sii sintetico nel summary (max 2 frasi). Se c'è una foto del volto, restituisci faceCoordinates [ymin, xmin, ymax, xmax]. \n\nREGOLE SKILLS:\n1. Estrai MASSIMO 10 skills.\n2. Includi SOLO competenze tecniche rilevanti, linguaggi, framework o certificazioni.\n3. ESCLUDI ASSOLUTAMENTE software generici (es. Google Chrome, Internet Explorer, Windows, Zoom, Skype, Pacchetto Office base) e soft skills generiche (es. Problem Solving, Team Work, Puntualità) a meno che non siano centrali per ruoli specifici (es. Sales).",
+                // MODIFIED PROMPT: Focus on Experience Context
+                systemInstruction: `Sei un parser di CV esperto. Estrai i dati in JSON rigoroso.
+                
+                ISTRUZIONI SUMMARY:
+                Non limitarti a una bio generica. Genera un summary di 4-5 frasi che spieghi COSA ha fatto il candidato e COME ha usato le sue competenze.
+                Distinguere tra "Utilizzatore" (es. Data Entry su SAP) e "Implementatore/Esperto" (es. Configuratore SAP).
+                Evidenzia responsabilità e risultati.
+
+                REGOLE SKILLS:
+                1. Estrai MASSIMO 10 skills tecniche principali.
+                2. Ignora software di base (Word, Excel base, Chrome, Windows) a meno che non sia un ruolo amministrativo junior.
+                3. Se c'è una foto del volto, restituisci faceCoordinates [ymin, xmin, ymax, xmax].`,
                 responseMimeType: 'application/json',
                 safetySettings: COMMON_SAFETY_SETTINGS,
                 responseSchema: {
@@ -242,23 +252,48 @@ export const evaluateFit = async (candidate: Candidate, job: JobPosition, compan
 
     if (!ai) return mockEval;
 
-    let systemInstruction = "Valuta match candidato/job (0-100). Sii severo ma giusto. Ragionamento max 2 frasi.";
-    if (companyContext && companyContext.name) {
-        systemInstruction = `Sei un Senior Recruiter per ${companyContext.name}. 
-        
-        CONTESTO AZIENDALE:
-        Settore: ${companyContext.industry}
-        Descrizione: ${companyContext.description}
-        Prodotti/Servizi: ${companyContext.productsServices || 'Non specificato'}
+    // --- CONTEXTUAL INTELLIGENCE LOGIC ---
+    
+    let roleFocus = "Generalista";
+    // Default weighting: Balanced
+    let weightingInstruction = "Bilancia Hard Skills (40%), Esperienza (30%) e Soft Skills/Fit (30%).";
 
-        ISTRUZIONI PER IL CALCOLO DEL MATCH (0-100%):
-        1. HARD SKILLS: Verifica corrispondenza con i requisiti del job.
-        2. INDUSTRY FIT: Se il candidato proviene da aziende concorrenti o dallo stesso settore (${companyContext.industry}), AUMENTA il punteggio.
-        3. PRODUCT FIT: Se il candidato ha esperienza con prodotti/servizi simili a "${companyContext.productsServices}", AUMENTA il punteggio.
-        4. CULTURE FIT: Valuta se l'esperienza pregressa (aziende simili per dimensioni/cultura) è compatibile.
-        
-        Nel reasoning, cita esplicitamente se hai trovato un match di settore o di prodotto.`;
+    const dept = job.department.toLowerCase();
+    const title = job.title.toLowerCase();
+
+    if (dept.includes('sales') || dept.includes('vendite') || dept.includes('commerciale') || title.includes('sales') || title.includes('account')) {
+        roleFocus = "SALES & COMMERCIAL";
+        weightingInstruction = "CRITICO: Priorità ai RISULTATI (numeri), NETWORK e capacità comunicative. Le Hard Skills tecniche (es. CRM) contano solo se usate per vendere, non per configurare.";
+    } else if (dept.includes('engineering') || dept.includes('dev') || dept.includes('it') || dept.includes('tech') || title.includes('developer') || title.includes('engineer')) {
+        roleFocus = "TECHNICAL / ENGINEERING";
+        weightingInstruction = "CRITICO: Priorità allo STACK TECNOLOGICO (Hard Skills 60%). Verifica la profondità tecnica: aver 'usato' un tool non basta, bisogna averlo 'sviluppato' o 'gestito' a fondo.";
+    } else if (dept.includes('product') || title.includes('manager') || title.includes('owner')) {
+        roleFocus = "PRODUCT & MANAGEMENT";
+        weightingInstruction = "CRITICO: Cerca esperienza pregressa in ruoli simili (Seniority). Valuta la capacità di visione e leadership.";
     }
+
+    let systemInstruction = `Sei un Senior Recruiter esperto in ${roleFocus}. Valuta il match candidato/job (0-100%).
+    
+    REGOLA AUREA: CONTESTO > PAROLE CHIAVE
+    Non dare punteggio solo perché una parola chiave è presente. Analizza COME è stata usata in base al ruolo.
+    
+    ESEMPIO DI RAGIONAMENTO:
+    - Se cerchi un 'Esperto CRM' (Tecnico) e il candidato è un 'Sales' che usa il CRM per inserire dati -> MATCH BASSO (è un utente, non un tecnico).
+    - Se cerchi un 'Sales' e il candidato è un 'Consulente CRM' che lo installa ma non vende -> MATCH MEDIO-BASSO (sa il tool ma non il mestiere).
+    - Se il CV dice "Utilizzo di Word/Excel" senza contesto -> Peso nullo per ruoli Senior.
+
+    ISTRUZIONI PESATURA:
+    ${weightingInstruction}
+
+    CONTESTO AZIENDALE:
+    Azienda: ${companyContext?.name || 'Non specificato'}
+    Settore: ${companyContext?.industry || 'Non specificato'}
+    Descrizione: "${companyContext?.description || ''}"
+
+    OUTPUT:
+    - Score: 0-100 (Sii severo. 90+ solo per match perfetti e comprovati).
+    - Reasoning: Max 2 frasi. Spiega i PRO (perché sì) e i CONTRO (cosa manca o è superficiale).
+    `;
 
     // TOKEN OPTIMIZATION: Truncate large fields
     const prompt = `
@@ -266,12 +301,15 @@ export const evaluateFit = async (candidate: Candidate, job: JobPosition, compan
     Nome: ${candidate.fullName}
     Ruolo Attuale: ${candidate.currentRole}
     Azienda Attuale: ${candidate.currentCompany}
-    Skills: ${candidate.skills.slice(0, 10).join(', ')}
-    Summary: ${candidate.summary?.substring(0, 600) || ''}
+    Skills Dichiarate: ${candidate.skills.slice(0, 15).join(', ')}
     
-    POSIZIONE:
+    STORIA E DETTAGLI (Analizza profondità qui): 
+    ${candidate.summary?.substring(0, 1500) || ''}
+    
+    POSIZIONE APERTA:
     Titolo: ${job.title}
-    Requisiti: ${job.requirements?.substring(0, 800) || ''}
+    Dipartimento: ${job.department}
+    Requisiti: ${job.requirements?.substring(0, 1000) || ''}
     `;
 
     try {
