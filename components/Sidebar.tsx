@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { LayoutDashboard, Users, Briefcase, Settings, ChevronLeft, ChevronRight, LogOut, Flag } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Settings, ChevronLeft, ChevronRight, LogOut, Flag, Hexagon } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface SidebarProps {
@@ -27,25 +26,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isColl
     });
 
     return (
-        <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-white h-screen shadow-lg flex flex-col sticky top-0 transition-all duration-300 ease-in-out z-20`}>
-            <div className={`p-6 border-b border-gray-100 flex ${isCollapsed ? 'justify-center' : 'justify-between'} items-center`}>
+        <div className={`${isCollapsed ? 'w-20' : 'w-64'} glass-sidebar h-screen shadow-xl flex flex-col sticky top-0 transition-all duration-300 ease-in-out z-20 border-r border-white/20`}>
+            <div className={`p-6 flex ${isCollapsed ? 'justify-center' : 'justify-between'} items-center`}>
                 {!isCollapsed && (
-                    <div className="flex items-center gap-2 text-indigo-600 overflow-hidden whitespace-nowrap">
-                        <LayoutDashboard size={28} className="shrink-0" />
-                        <h1 className="text-xl font-bold tracking-tight">TalentFlow</h1>
+                    <div className="flex items-center gap-3 text-emerald-800 overflow-hidden whitespace-nowrap animate-in fade-in">
+                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+                            <Hexagon size={20} fill="currentColor" className="text-white" />
+                        </div>
+                        <h1 className="text-xl font-serif font-bold tracking-tight">TalentFlow</h1>
                     </div>
                 )}
-                {isCollapsed && <LayoutDashboard size={28} className="text-indigo-600 shrink-0" />}
+                {isCollapsed && (
+                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center text-white shadow-lg">
+                        <Hexagon size={24} fill="currentColor" />
+                    </div>
+                )}
                 
                 <button 
                     onClick={toggleCollapse}
-                    className={`text-gray-400 hover:text-indigo-600 transition-colors ${isCollapsed ? 'hidden' : ''}`}
+                    className={`text-stone-400 hover:text-emerald-600 transition-colors ${isCollapsed ? 'hidden' : ''}`}
                 >
                     <ChevronLeft size={20} />
                 </button>
             </div>
 
-            <nav className="flex-1 p-4 space-y-2">
+            <nav className="flex-1 px-3 py-4 space-y-1">
                 {filteredMenu.map((item) => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
@@ -54,18 +59,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isColl
                             key={item.id}
                             onClick={() => onTabChange(item.id)}
                             title={isCollapsed ? item.label : ''}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group relative ${
                                 isActive 
-                                ? 'bg-indigo-50 text-indigo-600 shadow-sm font-medium' 
-                                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                ? 'bg-emerald-50/80 text-emerald-700 shadow-sm font-semibold backdrop-blur-md' 
+                                : 'text-stone-500 hover:bg-white/50 hover:text-stone-800'
                             } ${isCollapsed ? 'justify-center px-0' : ''}`}
                         >
-                            <Icon size={20} className="shrink-0" />
+                            {isActive && <div className="absolute left-0 w-1 h-6 bg-emerald-500 rounded-r-full"></div>}
+                            <Icon size={20} className={`shrink-0 transition-transform group-hover:scale-110 duration-200 ${isActive ? 'text-emerald-600' : 'text-stone-400 group-hover:text-stone-600'}`} />
                             {!isCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
                             
                             {/* Tooltip for collapsed mode */}
                             {isCollapsed && (
-                                <div className="absolute left-16 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 whitespace-nowrap">
+                                <div className="absolute left-16 bg-stone-800 text-white text-xs px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-50 whitespace-nowrap shadow-lg translate-x-[-10px] group-hover:translate-x-0">
                                     {item.label}
                                 </div>
                             )}
@@ -74,33 +80,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isColl
                 })}
             </nav>
 
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-4 border-t border-stone-200/30 bg-white/30 backdrop-blur-sm">
                  {isCollapsed ? (
                      <div className="flex flex-col items-center gap-4">
-                        <button onClick={toggleCollapse} className="text-gray-400 hover:text-indigo-600">
+                        <button onClick={toggleCollapse} className="text-stone-400 hover:text-emerald-600">
                             <ChevronRight size={24} />
                         </button>
-                        <img src={user?.avatar} alt="User" className="w-8 h-8 rounded-full border border-gray-200" />
+                        <img src={user?.avatar} alt="User" className="w-8 h-8 rounded-full border border-white shadow-sm" />
                      </div>
                  ) : (
-                    <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-3">
-                            <img src={user?.avatar} alt="User" className="w-10 h-10 rounded-full border border-gray-200 bg-gray-100" />
+                    <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="flex items-center gap-3 bg-white/60 p-2 rounded-xl border border-white shadow-sm">
+                            <img src={user?.avatar} alt="User" className="w-10 h-10 rounded-full border border-white shadow-sm object-cover" />
                             <div className="flex-1 overflow-hidden">
-                                <p className="text-sm font-bold text-gray-900 truncate">{user?.name}</p>
-                                <p className="text-xs text-gray-500 truncate flex items-center gap-1">
-                                    {user?.email} 
-                                    <span className="px-1 bg-gray-200 rounded text-[10px] text-gray-700 font-bold uppercase">{user?.role}</span>
+                                <p className="text-sm font-bold text-stone-800 truncate">{user?.name}</p>
+                                <p className="text-xs text-stone-500 truncate flex items-center gap-1">
+                                    <span className="px-1.5 py-0.5 bg-stone-100 rounded text-[9px] text-stone-600 font-bold uppercase tracking-wider border border-stone-200">{user?.role}</span>
                                 </p>
                             </div>
-                            <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors" title="Logout">
+                            <button onClick={onLogout} className="text-stone-400 hover:text-red-500 transition-colors p-1 hover:bg-red-50 rounded-lg" title="Logout">
                                 <LogOut size={18} />
                             </button>
                         </div>
                         
-                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-3 text-white text-center">
-                            <p className="text-[10px] opacity-80 uppercase tracking-wider">Powered by</p>
-                            <p className="font-bold text-xs">Google Gemini 2.5</p>
+                        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-3 text-white text-center shadow-lg shadow-emerald-200 relative overflow-hidden group">
+                            <div className="absolute top-0 left-0 w-full h-full bg-white/10 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                            <p className="text-[10px] opacity-80 uppercase tracking-wider font-medium">Powered by</p>
+                            <p className="font-bold text-xs flex items-center justify-center gap-1">Google Gemini 2.5 <SparklesIcon/></p>
                         </div>
                     </div>
                  )}
@@ -108,3 +114,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isColl
         </div>
     );
 };
+
+const SparklesIcon = () => (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="animate-pulse">
+        <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="white"/>
+    </svg>
+);

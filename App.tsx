@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { CandidateView } from './components/CandidateView';
@@ -230,9 +228,6 @@ function App() {
     return () => unsubscribe();
   }, [user, refreshTrigger, firebaseInitialized]); 
 
-  // NOTE: Auto-seeding logic removed for Production usage. 
-  // Use "Generate Demo Data" in Settings manually if needed.
-
   const handleConfigChange = () => {
       const { auth: a } = initFirebase();
       setAuthInstance(a);
@@ -402,7 +397,7 @@ function App() {
     };
 
     switch (activeTab) {
-      case 'dashboard': return <DashboardView data={data} onNavigate={setActiveTab} />;
+      case 'dashboard': return <DashboardView data={data} onNavigate={setActiveTab} currentUser={user} />;
       case 'candidates': return <CandidateView {...props} />;
       case 'recruitment': return <RecruitmentView data={data} refreshData={() => setRefreshTrigger(prev => prev + 1)} currentUser={user} onUpload={handleUploadFiles} />;
       case 'onboarding': return <OnboardingView data={data} refreshData={() => setRefreshTrigger(prev => prev + 1)} currentUser={user} />;
@@ -417,7 +412,7 @@ function App() {
   const duplicateCount = uploadQueue.filter(i => i.status === 'DUPLICATE').length;
 
   return (
-    <div className="flex min-h-screen bg-gray-50 overflow-hidden relative">
+    <div className="flex min-h-screen bg-nature-gradient overflow-hidden relative">
       <Sidebar 
         activeTab={activeTab} 
         onTabChange={setActiveTab} 

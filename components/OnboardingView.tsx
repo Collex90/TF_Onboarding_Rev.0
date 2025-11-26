@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { AppState, OnboardingProcess, OnboardingTask, User, OnboardingPhase, OnboardingPhaseLabels, OnboardingStatus, OnboardingStatusLabels, OnboardingStatusColors, UserRole, Comment, Attachment } from '../types';
+import { AppState, OnboardingProcess, OnboardingTask, User, OnboardingPhase, OnboardingPhaseLabels, OnboardingStatus, OnboardingStatusLabels, OnboardingStatusColors, UserRole, Comment, Attachment, CandidateStatus } from '../types';
 import { CheckCircle, Circle, Clock, Trash2, Search, Flag, Plus, Sparkles, Loader2, X, User as UserIcon, Calendar, ChevronRight, Filter, MessageSquare, Paperclip, FileText, Download, Send, Table, Image, GripVertical, AlertCircle, Upload } from 'lucide-react';
 import { updateOnboardingTask, deleteOnboardingProcess, generateId, createOnboardingProcess, getAllUsers, updateOnboardingStatus, addOnboardingComment, addTaskComment, addTaskAttachment, deleteTaskAttachment } from '../services/storage';
 import { generateOnboardingChecklist } from '../services/ai';
@@ -635,7 +635,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ data, refreshDat
                  <OnboardingSetupModal 
                     isOpen={isSetupModalOpen}
                     onClose={() => setIsSetupModalOpen(false)}
-                    candidate={data.candidates[0] || { id: 'dummy', fullName: 'Nuovo Processo', email: '', skills: [], summary: '', status: 'CANDIDATE', createdAt: 0 }} // Dummy if generic
+                    candidate={data.candidates[0] || { id: 'dummy', fullName: 'Nuovo Processo', email: '', skills: [], summary: '', status: CandidateStatus.CANDIDATE, createdAt: 0 }} // Dummy if generic
                     job={data.jobs[0] || { id: 'dummy', title: 'Generico', department: '', description: '', requirements: '', status: 'OPEN', createdAt: 0 }}
                     onProcessCreated={() => { setIsSetupModalOpen(false); refreshData(); }}
                 />
