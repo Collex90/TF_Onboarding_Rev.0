@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
-import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info, RefreshCw, PieChart, TrendingUp, Check } from 'lucide-react';
+import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info, RefreshCw, PieChart, TrendingUp, Check, ArrowLeft, BriefcaseBusiness, ChevronDown as ChevronDownIcon } from 'lucide-react';
 import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, addCandidateAttachment, deleteCandidateAttachment, deleteJob } from '../services/storage';
 import { evaluateFit, generateJobDetails, generateScorecardSchema } from '../services/ai';
 
@@ -66,6 +66,13 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const [processingJobs, setProcessingJobs] = useState<Set<string>>(new Set());
     const [isRecalculating, setIsRecalculating] = useState(false);
 
+    // --- WIZARD STATE ---
+    const [creationStep, setCreationStep] = useState(1); // 1: Info, 2: Scorecard, 3: Candidates
+    const [magicPrompt, setMagicPrompt] = useState('');
+    const [wizardSelectedCandidateIds, setWizardSelectedCandidateIds] = useState<Set<string>>(new Set());
+    const [wizardFiles, setWizardFiles] = useState<File[]>([]);
+    const wizardFileInputRef = useRef<HTMLInputElement>(null);
+
     const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
     const [isLoadTemplateModalOpen, setIsLoadTemplateModalOpen] = useState(false);
     const [templateName, setTemplateName] = useState('');
@@ -96,11 +103,11 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
     useEffect(() => {
         isMounted.current = true;
-        if (!selectedJobId) {
+        if (!selectedJobId && !isJobModalOpen) {
             searchInputRef.current?.focus();
         }
         return () => { isMounted.current = false; };
-    }, [selectedJobId]);
+    }, [selectedJobId, isJobModalOpen]);
 
     useEffect(() => {
         if (!viewingApp) { setIsPhotoZoomed(false); }
@@ -126,6 +133,10 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         setEditingJobId(null);
         setJobForm({ title: '', department: '', description: '', requirements: '', status: 'OPEN', scorecardSchema: undefined });
         setAssignedTeamMembers([]);
+        setCreationStep(1); // Reset step
+        setMagicPrompt('');
+        setWizardSelectedCandidateIds(new Set());
+        setWizardFiles([]);
         setIsJobModalOpen(true);
     };
 
@@ -140,7 +151,112 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
             scorecardSchema: job.scorecardSchema
         });
         setAssignedTeamMembers(job.assignedTeamMembers || []);
+        setCreationStep(1);
         setIsJobModalOpen(true);
+    };
+
+    const handleMagicFill = async () => {
+        if (!magicPrompt.trim()) return;
+        setIsGeneratingJob(true);
+        try {
+            // Heuristics: Treat prompt as title or title + dept
+            // We use the prompt as "Title" initially to contextually guide the AI
+            let title: string = magicPrompt;
+            let dept: string = "Generale";
+            
+            // Simple split heuristic if user uses format "Role per Dept"
+            if (magicPrompt.toLowerCase().includes(' per ')) {
+                const parts = magicPrompt.split(/ per /i);
+                if (parts.length >= 2) {
+                    title = parts[0].trim();
+                    dept = parts[1].trim();
+                }
+            }
+
+            setJobForm(prev => ({ ...prev, title, department: dept }));
+            
+            // Call AI
+            const details = await generateJobDetails(title, dept, data.companyInfo);
+            setJobForm(prev => ({ 
+                ...prev, 
+                title, 
+                department: dept,
+                description: details.description, 
+                requirements: details.requirements 
+            }));
+        } catch (e) {
+            alert("Errore generazione AI. Riprova.");
+        } finally {
+            setIsGeneratingJob(false);
+        }
+    };
+
+    const handleSaveJob = async () => {
+        // e.preventDefault(); // Called from button, not form submit
+        const commonData = { ...jobForm, assignedTeamMembers: assignedTeamMembers };
+        
+        try {
+            let targetJobId = editingJobId;
+
+            if (editingJobId) {
+                const oldJob = data.jobs.find(j => j.id === editingJobId);
+                const updatedJob: JobPosition = { ...oldJob!, ...commonData };
+                
+                await updateJob(updatedJob);
+                if (oldJob && (oldJob.description !== jobForm.description || oldJob.title !== jobForm.title)) {
+                    runBackgroundFitUpdate(editingJobId, updatedJob);
+                }
+            } else {
+                targetJobId = generateId();
+                const newJob: JobPosition = { id: targetJobId, ...commonData, createdAt: Date.now() };
+                await addJob(newJob);
+            }
+
+            // --- STEP 3: HANDLE CANDIDATES (ONLY FOR NEW OR EDIT) ---
+            if (targetJobId) {
+                // 1. Upload Files
+                if (wizardFiles.length > 0) {
+                    onUpload(wizardFiles, targetJobId);
+                }
+
+                // 2. Associate Existing Candidates
+                if (wizardSelectedCandidateIds.size > 0) {
+                    const promises = Array.from(wizardSelectedCandidateIds).map(async (candidateId) => {
+                        const candidate = data.candidates.find(c => c.id === candidateId);
+                        // Only add if not already applied
+                        const exists = data.applications.some(a => a.candidateId === candidateId && a.jobId === targetJobId);
+                        if (!exists) {
+                            let aiScore, aiReasoning;
+                            if (candidate) {
+                                try {
+                                    const job = editingJobId ? data.jobs.find(j => j.id === editingJobId) : { ...commonData, id: targetJobId } as JobPosition;
+                                    const fit = await evaluateFit(candidate, job!, data.companyInfo);
+                                    aiScore = fit.score;
+                                    aiReasoning = fit.reasoning;
+                                } catch(e){}
+                            }
+                            const app: Application = {
+                                id: generateId(),
+                                candidateId,
+                                jobId: targetJobId as string,
+                                status: SelectionStatus.TO_ANALYZE,
+                                aiScore,
+                                aiReasoning,
+                                updatedAt: Date.now()
+                            };
+                            return createApplication(app);
+                        }
+                    });
+                    await Promise.all(promises);
+                }
+            }
+
+            setIsJobModalOpen(false); 
+            refreshData();
+        } catch (err) {
+            console.error("Error saving job:", err);
+            alert("Errore durante il salvataggio.");
+        }
     };
 
     const promptDeleteJob = (e: React.MouseEvent, id: string) => {
@@ -198,41 +314,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 return next;
             });
             refreshData(); 
-        }
-    };
-
-    const handleSaveJob = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const commonData = { ...jobForm, assignedTeamMembers: assignedTeamMembers };
-        
-        try {
-            if (editingJobId) {
-                const oldJob = data.jobs.find(j => j.id === editingJobId);
-                const updatedJob: JobPosition = { ...oldJob!, ...commonData };
-                
-                const contentChanged = oldJob && (
-                    oldJob.description !== jobForm.description || 
-                    oldJob.requirements !== jobForm.requirements || 
-                    oldJob.title !== jobForm.title
-                );
-
-                await updateJob(updatedJob);
-                setIsJobModalOpen(false); 
-
-                if (contentChanged) {
-                    runBackgroundFitUpdate(editingJobId, updatedJob);
-                }
-                refreshData();
-
-            } else {
-                const newJob: JobPosition = { id: generateId(), ...commonData, createdAt: Date.now() };
-                await addJob(newJob);
-                setIsJobModalOpen(false);
-                refreshData();
-            }
-        } catch (err) {
-            console.error("Error saving job:", err);
-            alert("Errore durante il salvataggio.");
         }
     };
 
@@ -327,7 +408,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 setViewingApp(prev => prev ? { ...prev, app: { ...prev.app, aiScore: result.score, aiReasoning: result.reasoning } } : null);
             }
             refreshData(); 
-        } catch (e) { alert("Errore valutazione AI: " + e); } finally { setEvaluatingId(null); } 
+        } catch (e: any) { alert("Errore valutazione AI: " + (e.message || String(e))); } finally { setEvaluatingId(null); } 
     };
 
     const handleRecalculateSingleFit = async () => {
@@ -505,7 +586,13 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         return filtered; 
     }, [data.applications, selectedJobId, searchTerm, data.candidates, sortConfig]);
     
-    const availableCandidates = useMemo(() => { if (!selectedJobId) return []; const term = associateSearch.toLowerCase(); return data.candidates.filter(c => { const alreadyApplied = data.applications.some(a => a.candidateId === c.id && a.jobId === selectedJobId); if (alreadyApplied) return false; if (term && !c.fullName.toLowerCase().includes(term) && !c.email.toLowerCase().includes(term)) return false; return true; }); }, [data.candidates, data.applications, selectedJobId, associateSearch]);
+    const availableCandidatesForWizard = useMemo(() => { 
+        const term = associateSearch.toLowerCase(); 
+        return data.candidates.filter(c => { 
+            if (term && !c.fullName.toLowerCase().includes(term) && !c.email.toLowerCase().includes(term)) return false; 
+            return true; 
+        }); 
+    }, [data.candidates, associateSearch]);
     
     const SortHeader = ({ label, sortKey }: { label: string, sortKey: string }) => ( <th className="p-4 font-semibold cursor-pointer hover:bg-stone-100 transition-colors group select-none text-stone-600" onClick={() => handleSort(sortKey)}> <div className="flex items-center gap-1">{label}<div className="flex flex-col"><ChevronUp size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'asc' ? 'text-emerald-600' : 'text-stone-300'} /><ChevronDown size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'desc' ? 'text-emerald-600' : 'text-stone-300'} /></div></div> </th> );
     
@@ -691,74 +778,301 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     })}
                 </div>
                 
-                {/* ... Job Modals ... */}
+                {/* --- FULL SCREEN WIZARD MODAL FOR JOB CREATION --- */}
                 {isJobModalOpen && (
-                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
-                         <div className="bg-white rounded-2xl p-6 w-full max-w-4xl m-auto shadow-2xl animate-in zoom-in-95 duration-200 border border-white/50">
-                             <div className="flex justify-between items-center mb-6 border-b border-stone-100 pb-4"><h3 className="text-2xl font-bold text-stone-900 font-serif">{editingJobId ? 'Modifica Posizione' : 'Nuova Posizione'}</h3><button onClick={() => setIsJobModalOpen(false)} className="text-stone-400 hover:text-stone-600"><X size={24} /></button></div>
-                            <form onSubmit={handleSaveJob} className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-4">
-                                        <div><label className="block text-sm font-bold text-stone-700 mb-1">Titolo Posizione</label><input required value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all placeholder-stone-400" placeholder="es. Senior React Dev" /></div>
-                                        <div><label className="block text-sm font-bold text-stone-700 mb-1">Dipartimento</label><input required value={jobForm.department} onChange={e => setJobForm({...jobForm, department: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all placeholder-stone-400" placeholder="es. Engineering" /></div>
-                                        {editingJobId && (<div><label className="block text-sm font-bold text-stone-700 mb-1">Stato</label><select value={jobForm.status} onChange={(e) => setJobForm({...jobForm, status: e.target.value as any})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 text-stone-900 transition-all"><option value="OPEN">APERTA</option><option value="SUSPENDED">SOSPESA</option><option value="COMPLETED">COMPLETATA</option><option value="CLOSED">CHIUSA</option></select></div>)}
-                                        <div><label className="block text-sm font-bold text-stone-700 mb-2 flex items-center gap-2"><Users size={16} className="text-emerald-600"/> Assegna Team</label><div className="border border-stone-200 rounded-lg max-h-40 overflow-y-auto p-2 bg-stone-50 custom-scrollbar">{availableUsers.length === 0 ? <p className="text-xs text-stone-400 text-center py-2">Nessun utente disponibile</p> : availableUsers.map(u => (<div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer transition-colors" onClick={() => { const has = assignedTeamMembers.includes(u.uid || ''); setAssignedTeamMembers(prev => has ? prev.filter(id => id !== u.uid) : [...prev, u.uid || '']); }}><div className={`w-4 h-4 border rounded flex items-center justify-center ${assignedTeamMembers.includes(u.uid || '') ? 'bg-emerald-600 border-emerald-600' : 'border-stone-300 bg-white'}`}>{assignedTeamMembers.includes(u.uid || '') && <CheckSquare size={12} className="text-white"/>}</div><span className="text-sm text-stone-800">{u.name} <span className="text-xs text-stone-400">({u.role})</span></span></div>))}</div></div>
-                                         <div className="pt-2"><button type="button" onClick={handleGenerateJobAI} disabled={isGeneratingJob || !jobForm.title || !jobForm.department} className="w-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-100 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm">{isGeneratingJob ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} Genera Descrizione con AI</button></div>
-                                    </div>
-                                    <div className="space-y-4"><div><label className="block text-sm font-bold text-stone-700 mb-1">Descrizione</label><textarea required rows={6} value={jobForm.description} onChange={e => setJobForm({...jobForm, description: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all placeholder-stone-400" placeholder="Descrizione del ruolo..." /></div><div><label className="block text-sm font-bold text-stone-700 mb-1">Requisiti</label><textarea required rows={6} value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all placeholder-stone-400" placeholder="Lista requisiti..." /></div></div>
+                    <div className="fixed inset-0 bg-stone-50 z-[100] flex flex-col animate-in slide-in-from-bottom-4">
+                        {/* MAGIC HEADER REVISED */}
+                        <div className="h-72 bg-stone-900 relative flex flex-col justify-end shadow-xl overflow-hidden">
+                            {/* Abstract Background Image & Overlay */}
+                            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop')] bg-cover bg-center opacity-40"></div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-stone-900 via-stone-900/60 to-transparent"></div>
+                            
+                            <button onClick={() => setIsJobModalOpen(false)} className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10 z-50"><X size={24}/></button>
+                            
+                            <div className="max-w-4xl mx-auto w-full relative z-10 px-8 pb-8 space-y-4">
+                                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-widest mb-1">
+                                    <BriefcaseBusiness size={14}/> {editingJobId ? 'Modifica Posizione' : 'Nuova Posizione'}
                                 </div>
-                                <div className="border-t border-stone-100 pt-6">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h4 className="text-lg font-bold text-stone-900 flex items-center gap-2"><ListChecks size={20} className="text-emerald-600"/> Scheda di Valutazione</h4>
-                                        <div className="flex gap-2">
-                                            <button type="button" onClick={handleOpenLoadTemplate} className="text-xs font-bold bg-white text-stone-600 border border-stone-200 hover:bg-stone-50 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
-                                                <Download size={14}/> Carica Modello
-                                            </button>
-                                            <button type="button" onClick={handleOpenSaveTemplate} className="text-xs font-bold bg-white text-stone-600 border border-stone-200 hover:bg-stone-50 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm">
-                                                <Save size={14}/> Salva Modello
-                                            </button>
-                                            <button type="button" onClick={handleGenerateScorecardAI} disabled={isGeneratingScorecard} className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-100 flex items-center gap-2 transition-colors disabled:opacity-50 shadow-sm">
-                                                {isGeneratingScorecard ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} Genera con AI
-                                            </button>
-                                        </div>
+                                
+                                <div className="relative">
+                                    <textarea 
+                                        value={magicPrompt} 
+                                        onChange={e => setMagicPrompt(e.target.value)} 
+                                        placeholder="Descrivi il ruolo (es. Senior React Developer per team Engineering...)"
+                                        className="w-full bg-transparent text-white text-3xl md:text-5xl font-serif font-bold placeholder:text-white/20 outline-none border-none resize-none overflow-hidden h-auto min-h-[80px]"
+                                        rows={2}
+                                        style={{ height: 'auto' }}
+                                        onInput={(e: any) => {
+                                            e.target.style.height = "auto";
+                                            e.target.style.height = e.target.scrollHeight + "px";
+                                        }}
+                                    />
+                                    <div className="mt-4 flex">
+                                        <button 
+                                            onClick={handleMagicFill}
+                                            disabled={isGeneratingJob || !magicPrompt.trim()}
+                                            className="bg-emerald-500 text-white px-5 py-2 rounded-full text-sm font-bold shadow-lg hover:bg-emerald-400 transition-all flex items-center gap-2 disabled:opacity-50 disabled:scale-95 hover:scale-105"
+                                        >
+                                            {isGeneratingJob ? <Loader2 size={16} className="animate-spin"/> : <Sparkles size={16}/>}
+                                            Genera con AI
+                                        </button>
                                     </div>
-                                    <div className="space-y-4">
-                                        {jobForm.scorecardSchema?.categories.map(cat => (
-                                            <div key={cat.id} className="border border-stone-200 rounded-lg p-4 bg-stone-50">
-                                                <div className="flex justify-between items-center mb-3">
-                                                    <input value={cat.name} onChange={(e) => handleUpdateCategoryName(cat.id, e.target.value)} className="font-bold text-stone-800 bg-white border border-stone-300 rounded px-2 py-1 text-sm w-1/2 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Nome Categoria" />
-                                                    <button type="button" onClick={() => handleDeleteCategory(cat.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                                </div>
+                                
+                                <div className="flex gap-4 pt-6 border-t border-white/10 mt-6">
+                                    {[1, 2, 3].map(step => (
+                                        <div key={step} onClick={() => setCreationStep(step)} className={`flex items-center gap-2 cursor-pointer transition-all ${creationStep === step ? 'opacity-100' : 'opacity-40 hover:opacity-70'}`}>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${creationStep === step ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/50' : 'bg-white/20 text-white'}`}>{step}</div>
+                                            <span className="text-white text-sm font-medium tracking-wide">{step === 1 ? 'Dettagli' : step === 2 ? 'Valutazione' : 'Candidati'}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* WIZARD CONTENT */}
+                        <div className="flex-1 overflow-y-auto bg-stone-50">
+                            <div className="max-w-4xl mx-auto p-8 pb-32">
+                                {/* STEP 1: JOB DETAILS */}
+                                {creationStep === 1 && (
+                                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="space-y-6">
+                                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                                                    <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><FileText size={20} className="text-emerald-600"/> Informazioni Base</h3>
+                                                    <div className="space-y-4">
+                                                        <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Titolo</label><input value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" placeholder="Es. Marketing Manager" /></div>
+                                                        <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Dipartimento</label><input value={jobForm.department} onChange={e => setJobForm({...jobForm, department: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" placeholder="Es. Marketing" /></div>
+                                                        {editingJobId && (<div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Stato</label><select value={jobForm.status} onChange={e => setJobForm({...jobForm, status: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none"><option value="OPEN">APERTA</option><option value="CLOSED">CHIUSA</option></select></div>)}
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-2 pl-4">
-                                                    {cat.items.map(item => (
-                                                        <div key={item.id} className="flex items-center gap-2">
-                                                            <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shrink-0"></div>
-                                                            <input value={item.label} onChange={(e) => handleUpdateItemLabel(cat.id, item.id, e.target.value)} className="flex-1 text-sm bg-white border border-stone-300 rounded px-2 py-1 text-stone-700 focus:ring-2 focus:ring-emerald-500 outline-none" />
-                                                            <button type="button" onClick={() => handleDeleteItem(cat.id, item.id)} className="text-stone-300 hover:text-red-500"><X size={14} /></button>
-                                                        </div>
-                                                    ))}
-                                                    <button type="button" onClick={() => handleAddItem(cat.id)} className="text-xs text-emerald-600 font-bold hover:underline flex items-center gap-1 mt-2"><Plus size={12} /> Aggiungi Voce</button>
+                                                
+                                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                                                    <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><Users size={20} className="text-emerald-600"/> Team di Selezione</h3>
+                                                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar p-1">
+                                                        {availableUsers.map(u => {
+                                                            const isSelected = assignedTeamMembers.includes(u.uid!);
+                                                            return (
+                                                                <div 
+                                                                    key={u.uid} 
+                                                                    onClick={() => setAssignedTeamMembers(prev => prev.includes(u.uid!) ? prev.filter(id => id !== u.uid) : [...prev, u.uid!])} 
+                                                                    className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${isSelected ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'bg-stone-50 border-stone-100 hover:border-emerald-300'}`}
+                                                                >
+                                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-stone-300'}`}>
+                                                                        {isSelected && <Check size={12} className="text-white"/>}
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <p className={`text-sm font-bold ${isSelected ? 'text-emerald-900' : 'text-stone-900'}`}>{u.name}</p>
+                                                                        <p className="text-xs text-stone-500">{u.role}</p>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        ))}
-                                        <button type="button" onClick={handleAddCategory} className="w-full py-2 border-2 border-dashed border-stone-300 rounded-lg text-stone-500 font-medium text-sm hover:border-emerald-400 hover:text-emerald-600 transition-colors flex items-center justify-center gap-2"><Plus size={16} /> Aggiungi Categoria</button>
+                                            
+                                            <div className="space-y-6">
+                                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 h-full flex flex-col">
+                                                    <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><ListChecks size={20} className="text-emerald-600"/> Dettagli Ruolo</h3>
+                                                    <div className="space-y-4 flex-1">
+                                                        <div className="flex-1 flex flex-col"><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Descrizione</label><textarea value={jobForm.description} onChange={e => setJobForm({...jobForm, description: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none flex-1 min-h-[150px]" placeholder="Descrizione del ruolo..." /></div>
+                                                        <div className="flex-1 flex flex-col"><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Requisiti</label><textarea value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none flex-1 min-h-[150px]" placeholder="Requisiti richiesti..." /></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="flex justify-end gap-3 pt-6 border-t border-stone-100">
-                                    <button type="button" onClick={() => setIsJobModalOpen(false)} disabled={isRecalculating} className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-xl font-medium transition-colors">Annulla</button>
-                                    <button type="submit" disabled={isRecalculating} className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 flex items-center gap-2 transition-all">
-                                        {editingJobId ? 'Aggiorna' : 'Crea Posizione'}
+                                )}
+
+                                {/* STEP 2: SCORECARD */}
+                                {creationStep === 2 && (
+                                    <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-200 animate-in fade-in slide-in-from-right-4">
+                                        <div className="flex justify-between items-center mb-6 border-b border-stone-100 pb-4">
+                                            <div><h3 className="text-xl font-bold text-stone-900">Scheda di Valutazione</h3><p className="text-stone-500 text-sm">Definisci i criteri per valutare i candidati durante i colloqui.</p></div>
+                                            <div className="flex gap-2">
+                                                <button type="button" onClick={handleOpenSaveTemplate} className="text-xs font-bold text-stone-600 hover:bg-stone-50 px-3 py-2 rounded-lg border border-stone-200 flex items-center gap-2 transition-colors"><Save size={14}/> Salva come Modello</button>
+                                                <button type="button" onClick={handleOpenLoadTemplate} className="text-xs font-bold bg-stone-50 text-stone-600 border border-stone-200 hover:bg-stone-100 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors"><Download size={14}/> Carica Modello</button>
+                                                <button type="button" onClick={handleGenerateScorecardAI} disabled={isGeneratingScorecard} className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-100 flex items-center gap-2 transition-colors disabled:opacity-50 shadow-sm">{isGeneratingScorecard ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} Genera con AI</button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="space-y-6">
+                                            {(!jobForm.scorecardSchema?.categories || jobForm.scorecardSchema.categories.length === 0) && (
+                                                <div className="text-center py-12 border-2 border-dashed border-stone-200 rounded-xl bg-stone-50">
+                                                    <ListChecks size={48} className="mx-auto text-stone-300 mb-3"/>
+                                                    <p className="text-stone-500 font-medium">Nessuna categoria presente.</p>
+                                                    <button onClick={handleAddCategory} className="mt-4 text-emerald-600 font-bold hover:underline">Inizia aggiungendo una categoria</button>
+                                                </div>
+                                            )}
+                                            
+                                            {/* VERTICAL LIST VIEW FOR SCORECARD */}
+                                            <div className="space-y-6">
+                                                {jobForm.scorecardSchema?.categories.map(cat => (
+                                                    <div key={cat.id} className="border border-stone-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                                        {/* Category Header */}
+                                                        <div className="bg-stone-50 p-4 border-b border-stone-100 flex items-center justify-between">
+                                                            <div className="flex-1">
+                                                                <input 
+                                                                    value={cat.name} 
+                                                                    onChange={(e) => handleUpdateCategoryName(cat.id, e.target.value)} 
+                                                                    className="font-bold text-lg text-stone-900 bg-transparent border-b border-transparent hover:border-stone-300 focus:border-emerald-500 outline-none w-full transition-colors" 
+                                                                    placeholder="Nome Categoria" 
+                                                                />
+                                                            </div>
+                                                            <button onClick={() => handleDeleteCategory(cat.id)} className="text-stone-400 hover:text-red-500 p-2 hover:bg-red-50 rounded transition-colors"><Trash2 size={18}/></button>
+                                                        </div>
+                                                        
+                                                        {/* Items List */}
+                                                        <div className="p-4 space-y-3">
+                                                            {cat.items.map(item => (
+                                                                <div key={item.id} className="flex items-center gap-3">
+                                                                    <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shrink-0"></div>
+                                                                    <div className="flex-1">
+                                                                        <input 
+                                                                            value={item.label} 
+                                                                            onChange={(e) => handleUpdateItemLabel(cat.id, item.id, e.target.value)} 
+                                                                            className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-100 text-stone-700"
+                                                                            placeholder="Descrizione criterio..." 
+                                                                        />
+                                                                    </div>
+                                                                    <button onClick={() => handleDeleteItem(cat.id, item.id)} className="text-stone-300 hover:text-red-500 p-1"><X size={16}/></button>
+                                                                </div>
+                                                            ))}
+                                                            
+                                                            <button onClick={() => handleAddItem(cat.id)} className="text-xs text-emerald-600 font-bold hover:bg-emerald-50 px-3 py-2 rounded-lg flex items-center gap-1 transition-colors mt-2">
+                                                                <Plus size={14}/> Aggiungi Criterio
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                
+                                                <button onClick={handleAddCategory} className="w-full py-4 border-2 border-dashed border-stone-300 rounded-xl text-stone-400 hover:text-emerald-600 hover:border-emerald-400 hover:bg-white transition-all font-bold flex items-center justify-center gap-2">
+                                                    <Plus size={20}/> Aggiungi Nuova Categoria
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 3: CANDIDATES */}
+                                {creationStep === 3 && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-right-4">
+                                        {/* IMPORT CV AREA */}
+                                        <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-200 flex flex-col">
+                                            <h3 className="text-xl font-bold text-stone-900 mb-2 flex items-center gap-2"><UploadCloud size={24} className="text-emerald-600"/> Importa CV</h3>
+                                            <p className="text-stone-500 text-sm mb-6">Carica i CV dei candidati per questa posizione. L'AI estrarrà automaticamente i dati.</p>
+                                            
+                                            <div 
+                                                className="flex-1 border-2 border-dashed border-stone-300 rounded-xl bg-stone-50 flex flex-col items-center justify-center p-8 hover:bg-emerald-50/30 hover:border-emerald-400 transition-all cursor-pointer relative"
+                                                onClick={() => wizardFileInputRef.current?.click()}
+                                            >
+                                                <input 
+                                                    type="file" 
+                                                    multiple 
+                                                    accept=".pdf,image/*" 
+                                                    className="hidden" 
+                                                    ref={wizardFileInputRef} 
+                                                    onChange={(e) => {
+                                                        if (e.target.files) {
+                                                            setWizardFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                        }
+                                                    }}
+                                                />
+                                                <UploadCloud size={48} className="text-stone-300 mb-4"/>
+                                                <p className="font-bold text-stone-700">Clicca per caricare i file</p>
+                                                <p className="text-xs text-stone-400 mt-2">Supporta PDF e Immagini</p>
+                                            </div>
+
+                                            {wizardFiles.length > 0 && (
+                                                <div className="mt-4 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                                    {wizardFiles.map((f, i) => (
+                                                        <div key={i} className="flex justify-between items-center p-3 bg-stone-50 rounded-lg border border-stone-100">
+                                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                                <FileText size={16} className="text-stone-400 shrink-0"/>
+                                                                <span className="text-sm font-medium text-stone-700 truncate">{f.name}</span>
+                                                            </div>
+                                                            <button onClick={() => setWizardFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600"><X size={16}/></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* ASSOCIATE EXISTING */}
+                                        <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-200 flex flex-col h-[500px]">
+                                            <div className="mb-6">
+                                                <h3 className="text-xl font-bold text-stone-900 mb-2 flex items-center gap-2"><Users size={24} className="text-indigo-600"/> Associa dal Database</h3>
+                                                <div className="relative mt-4">
+                                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400" size={18}/>
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Cerca candidato..." 
+                                                        className="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                        value={associateSearch}
+                                                        onChange={e => setAssociateSearch(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 border border-stone-100 rounded-xl p-2 bg-stone-50/30">
+                                                {availableCandidatesForWizard.length === 0 ? <p className="text-center text-stone-400 py-10 italic">Nessun candidato trovato.</p> : availableCandidatesForWizard.map(c => (
+                                                    <div 
+                                                        key={c.id} 
+                                                        onClick={() => { const next = new Set(wizardSelectedCandidateIds); if(next.has(c.id)) next.delete(c.id); else next.add(c.id); setWizardSelectedCandidateIds(next); }} 
+                                                        className={`flex items-center gap-3 p-3 bg-white border rounded-xl cursor-pointer transition-all hover:shadow-sm ${wizardSelectedCandidateIds.has(c.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50' : 'border-stone-200'}`}
+                                                    >
+                                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${wizardSelectedCandidateIds.has(c.id) ? 'bg-indigo-600 border-indigo-600' : 'border-stone-300 bg-white'}`}>{wizardSelectedCandidateIds.has(c.id) && <CheckSquare size={14} className="text-white" />}</div>
+                                                        <div className="w-8 h-8 rounded-full bg-stone-100 overflow-hidden border border-stone-200">{c.photo ? <img src={`data:image/jpeg;base64,${c.photo}`} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center font-bold text-stone-500 text-xs">{c.fullName.charAt(0)}</div>}</div>
+                                                        <div><p className="font-bold text-sm text-stone-900">{c.fullName}</p><p className="text-xs text-stone-500">{c.skills.slice(0,3).join(', ')}</p></div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="mt-4 text-right text-xs font-bold text-indigo-600">{wizardSelectedCandidateIds.size} Selezionati</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* FOOTER */}
+                        <div className="bg-white border-t border-stone-200 p-6 flex justify-between items-center shadow-lg-up relative z-20">
+                            <button 
+                                onClick={() => creationStep > 1 ? setCreationStep(creationStep - 1) : setIsJobModalOpen(false)} 
+                                className="px-6 py-3 text-stone-600 hover:bg-stone-100 rounded-xl font-bold flex items-center gap-2 transition-colors"
+                            >
+                                {creationStep > 1 ? <ArrowLeft size={18}/> : null}
+                                {creationStep > 1 ? 'Indietro' : 'Annulla'}
+                            </button>
+                            
+                            <div className="flex gap-4">
+                                {creationStep < 3 ? (
+                                    <button 
+                                        onClick={() => setCreationStep(creationStep + 1)}
+                                        disabled={!jobForm.title} 
+                                        className="px-8 py-3 bg-stone-900 text-white rounded-xl font-bold hover:bg-emerald-600 transition-all flex items-center gap-2 shadow-lg disabled:opacity-50"
+                                    >
+                                        Avanti <ArrowRight size={18}/>
                                     </button>
-                                </div>
-                            </form>
-                         </div>
+                                ) : (
+                                    <button 
+                                        onClick={handleSaveJob}
+                                        disabled={isRecalculating}
+                                        className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
+                                    >
+                                        <CheckCircle size={20}/>
+                                        {editingJobId ? 'Aggiorna Posizione' : 'Crea Posizione'}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
                 
-                {/* ... Template Manager Modals (using similar style) ... */}
+                {/* ... Template Manager Modals (Same as before) ... */}
                 {/* Save Template Modal */}
                 {isSaveTemplateModalOpen && (
-                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[60] backdrop-blur-sm">
+                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[110] backdrop-blur-sm">
                         <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95">
                             <h3 className="font-bold text-stone-900 mb-4 font-serif text-lg">Salva come Modello</h3>
                             <input autoFocus value={templateName} onChange={e => setTemplateName(e.target.value)} className="w-full border border-stone-300 rounded-lg p-2.5 mb-4 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-stone-50 focus:bg-white" placeholder="Nome del modello..." />
@@ -771,7 +1085,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 )}
                 {/* Load Template Modal */}
                 {isLoadTemplateModalOpen && (
-                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[60] backdrop-blur-sm">
+                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[110] backdrop-blur-sm">
                         <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col animate-in zoom-in-95">
                             <h3 className="font-bold text-stone-900 mb-4 font-serif text-lg">Carica Modello</h3>
                             <div className="flex-1 overflow-y-auto space-y-2 mb-4 custom-scrollbar">
@@ -783,47 +1097,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 ))}
                             </div>
                             <button onClick={() => setIsLoadTemplateModalOpen(false)} className="w-full py-2 bg-stone-100 text-stone-600 rounded-xl text-sm hover:bg-stone-200 font-medium">Chiudi</button>
-                        </div>
-                    </div>
-                )}
-                {/* Template Library Manager */}
-                {isTemplateManagerOpen && (
-                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[60] backdrop-blur-sm">
-                        <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-in zoom-in-95 border border-white/50">
-                            <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-stone-900 flex items-center gap-2 font-serif"><ListChecks size={20} className="text-emerald-600"/> Libreria Modelli</h3><button onClick={() => setIsTemplateManagerOpen(false)} className="text-stone-400 hover:text-stone-600"><X size={24}/></button></div>
-                            <div className="flex justify-end mb-4"><button onClick={openNewTemplate} className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-emerald-700 flex items-center gap-2 shadow-sm transition-all"><Plus size={16}/> Nuovo Modello</button></div>
-                            <div className="flex-1 overflow-y-auto space-y-3 p-1 custom-scrollbar">
-                                {templates.length === 0 ? <p className="text-center text-stone-400 py-10 italic">Nessun modello trovato.</p> : templates.map(t => (
-                                    <div key={t.id} className="flex justify-between items-center p-4 bg-stone-50 border border-stone-200 rounded-xl hover:shadow-sm hover:bg-white transition-all">
-                                        <div><h4 className="font-bold text-stone-900">{t.name}</h4><p className="text-xs text-stone-500">{t.schema.categories.length} categorie, {t.schema.categories.reduce((acc, c) => acc + c.items.length, 0)} criteri</p></div>
-                                        <div className="flex gap-2"><button onClick={() => openEditTemplate(t)} className="p-2 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"><Edit size={16}/></button><button onClick={() => handleDeleteTemplate(t.id)} className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button></div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
-                {/* Template Editor */}
-                {isTemplateEditorOpen && editingTemplate && (
-                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[70] backdrop-blur-sm">
-                        <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col animate-in zoom-in-95">
-                            <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-stone-900 font-serif">Editor Modello</h3><button onClick={() => setIsTemplateEditorOpen(false)} className="text-stone-400 hover:text-stone-600"><X size={24}/></button></div>
-                            <div className="mb-4"><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Nome Modello</label><input value={editingTemplate.name} onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})} className="w-full p-2 border border-stone-300 rounded-lg font-bold text-stone-900 outline-none focus:ring-2 focus:ring-emerald-500 bg-stone-50 focus:bg-white"/></div>
-                            <div className="flex-1 overflow-y-auto space-y-4 p-1 custom-scrollbar">
-                                {editingTemplate.schema.categories.map(cat => (
-                                    <div key={cat.id} className="border border-stone-200 rounded-lg p-4 bg-stone-50">
-                                        <div className="flex justify-between items-center mb-2"><input value={cat.name} onChange={(e) => handleTemplateUpdateCategory(cat.id, e.target.value)} className="font-bold text-stone-800 bg-transparent border-b border-transparent focus:border-emerald-500 outline-none w-1/2"/><button onClick={() => handleTemplateDeleteCategory(cat.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button></div>
-                                        <div className="space-y-2 pl-2">
-                                            {cat.items.map(item => (
-                                                <div key={item.id} className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-stone-400 rounded-full"></div><input value={item.label} onChange={(e) => handleTemplateUpdateItem(cat.id, item.id, e.target.value)} className="flex-1 text-sm bg-white border border-stone-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-emerald-500"/><button onClick={() => handleTemplateDeleteItem(cat.id, item.id)} className="text-stone-300 hover:text-red-500"><X size={12}/></button></div>
-                                            ))}
-                                            <button onClick={() => handleTemplateAddItem(cat.id)} className="text-xs text-emerald-600 hover:underline mt-2 font-bold">+ Aggiungi Voce</button>
-                                        </div>
-                                    </div>
-                                ))}
-                                <button onClick={handleTemplateAddCategory} className="w-full py-2 border-2 border-dashed border-stone-300 rounded-lg text-stone-500 text-sm hover:border-emerald-400 hover:text-emerald-600 font-medium transition-colors">+ Aggiungi Categoria</button>
-                            </div>
-                            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-stone-100"><button onClick={() => setIsTemplateEditorOpen(false)} className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-xl font-medium">Annulla</button><button onClick={saveEditedTemplate} className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-md">Salva Modello</button></div>
                         </div>
                     </div>
                 )}
@@ -867,7 +1140,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                 >
                                                     <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-stone-400'}`}></span>
                                                     {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
-                                                    <ChevronDown size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
+                                                    <ChevronDownIcon size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
                                                 </button>
 
                                                 {isJobStatusDropdownOpen && (
@@ -1113,7 +1386,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                             >
                                                 <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-stone-400'}`}></span>
                                                 {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
-                                                <ChevronDown size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
+                                                <ChevronDownIcon size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
                                             </button>
 
                                             {/* CUSTOM DROPDOWN MENU */}
@@ -1216,8 +1489,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><Users size={14}/> Team di Selezione</h4><div className="bg-white border border-stone-200 rounded-xl overflow-hidden">{!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (<p className="p-4 text-sm text-stone-400 italic">Nessun membro assegnato.</p>) : (jobInfoTarget.assignedTeamMembers.map(uid => { const u = availableUsers.find(user => user.uid === uid); return (<div key={uid} className="flex items-center gap-3 p-3 hover:bg-stone-50 border-b border-stone-50 last:border-0"><div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-emerald-600 border border-stone-200">{u ? u.name.charAt(0) : '?'}</div><div><p className="text-sm font-bold text-stone-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p><p className="text-xs text-stone-500">{u ? u.role : 'Membro Team'}</p></div></div>)}))}</div></div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
             {/* QUICK VIEW OVERLAY */}
             {viewingApp && (
@@ -1470,7 +1742,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         <div className="flex justify-between items-center mb-4 shrink-0"><h3 className="text-xl font-bold text-stone-900 font-serif">Associa Candidato</h3><button onClick={() => setIsAssociateModalOpen(false)} className="text-stone-400 hover:text-stone-600"><X size={24} /></button></div>
                         <div className="flex gap-2 mb-4 shrink-0"><div className="relative flex-1 group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 group-hover:text-emerald-500 transition-colors" size={18} /><input type="text" placeholder="Cerca nel database..." className="w-full pl-10 pr-4 py-2 bg-stone-50 border border-stone-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all" value={associateSearch} onChange={(e) => setAssociateSearch(e.target.value)} /></div></div>
                         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 border border-stone-200 rounded-lg p-2 bg-stone-50/50">
-                            {availableCandidates.length === 0 ? <p className="text-center text-stone-400 py-4 italic">Nessun candidato disponibile.</p> : availableCandidates.map(c => (
+                            {availableCandidatesForWizard.length === 0 ? <p className="text-center text-stone-400 py-4 italic">Nessun candidato disponibile.</p> : availableCandidatesForWizard.map(c => (
                                 <div key={c.id} onClick={() => toggleCandidateSelection(c.id)} className={`flex items-center gap-3 p-3 bg-white border rounded-lg cursor-pointer transition-all hover:shadow-sm ${selectedAssociateIds.has(c.id) ? 'border-emerald-500 ring-1 ring-emerald-500 bg-emerald-50' : 'border-stone-200'}`}>
                                     <div className={`w-5 h-5 rounded border flex items-center justify-center ${selectedAssociateIds.has(c.id) ? 'bg-emerald-600 border-emerald-600' : 'border-stone-300 bg-white'}`}>{selectedAssociateIds.has(c.id) && <CheckSquare size={14} className="text-white" />}</div>
                                     <div className="w-8 h-8 rounded-full bg-stone-100 overflow-hidden border border-stone-200">{c.photo ? <img src={`data:image/jpeg;base64,${c.photo}`} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center font-bold text-stone-500 text-xs">{c.fullName.charAt(0)}</div>}</div>
