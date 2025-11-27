@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
-import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info, RefreshCw, PieChart, TrendingUp, Check, ArrowLeft, BriefcaseBusiness, ChevronDown as ChevronDownIcon } from 'lucide-react';
+import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info, RefreshCw, PieChart, TrendingUp, Check, ArrowLeft, ChevronDown as ChevronDownIcon } from 'lucide-react';
 import { addJob, createApplication, updateApplicationStatus, updateApplicationAiScore, generateId, addCandidate, updateApplicationMetadata, addCandidateComment, updateCandidate, updateJob, getAllUsers, getEmailTemplates, updateApplicationScorecard, saveScorecardTemplate, getScorecardTemplates, deleteScorecardTemplate, updateScorecardTemplate, addCandidateAttachment, deleteCandidateAttachment, deleteJob } from '../services/storage';
 import { evaluateFit, generateJobDetails, generateScorecardSchema } from '../services/ai';
 
@@ -176,7 +176,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
             setJobForm(prev => ({ ...prev, title, department: dept }));
             
             // Call AI
-            const details = await generateJobDetails(title, dept, data.companyInfo);
+            const details = await generateJobDetails(title, dept, data.companyInfo) as { description: string, requirements: string };
             setJobForm(prev => ({ 
                 ...prev, 
                 title, 
@@ -791,7 +791,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             
                             <div className="max-w-4xl mx-auto w-full relative z-10 px-8 pb-8 space-y-4">
                                 <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-widest mb-1">
-                                    <BriefcaseBusiness size={14}/> {editingJobId ? 'Modifica Posizione' : 'Nuova Posizione'}
+                                    <Briefcase size={14}/> {editingJobId ? 'Modifica Posizione' : 'Nuova Posizione'}
                                 </div>
                                 
                                 <div className="relative">
