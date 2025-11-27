@@ -35,9 +35,9 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, 
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-stone-200" onClick={e => e.stopPropagation()}>
+            <div className="glass-card bg-white/95 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-stone-200" onClick={e => e.stopPropagation()}>
                 <div className="flex flex-col items-center text-center">
-                    <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-600 border border-red-100">
+                    <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-600 border border-red-100 shadow-sm">
                         <Trash2 size={24} />
                     </div>
                     <h3 className="text-lg font-bold text-stone-900 mb-2 font-serif">Elimina {count > 1 ? `${count} Candidati` : 'Candidato'}</h3>
@@ -46,7 +46,7 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, 
                     </p>
                     <div className="flex gap-3 w-full">
                         <button onClick={onClose} disabled={isDeleting} className="flex-1 px-4 py-2 bg-stone-100 text-stone-700 rounded-xl font-medium hover:bg-stone-200 transition-colors disabled:opacity-50">Annulla</button>
-                        <button onClick={onConfirm} disabled={isDeleting} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 shadow-md shadow-red-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">{isDeleting ? <Loader2 size={16} className="animate-spin"/> : 'Elimina'}</button>
+                        <button onClick={onConfirm} disabled={isDeleting} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 shadow-lg shadow-red-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">{isDeleting ? <Loader2 size={16} className="animate-spin"/> : 'Elimina'}</button>
                     </div>
                 </div>
             </div>
@@ -103,9 +103,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         if (!viewingCandidate) return null;
         const job = jobs.find(j => applications.some(a => a.candidateId === viewingCandidate.id && a.jobId === j.id));
         
-        // Fallback Job Object to prevent crash if job is missing
         if (!job) {
-             // If jobs array has items, use the first one, otherwise create a dummy
              return jobs.length > 0 ? jobs[0] : { 
                  id: 'unknown_job', 
                  title: 'Posizione Non Specificata', 
@@ -123,16 +121,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     useEffect(() => {
         if (!viewingCandidate) {
             setIsPhotoZoomed(false);
-            // Focus search when closing quick view or initially mounting
             searchInputRef.current?.focus();
         } else {
-            // Reset dropdown state when opening a candidate
             setIsStatusDropdownOpen(false);
         }
     }, [viewingCandidate]);
 
     useEffect(() => {
-        // Clear selections on search change
         setSelectedIds(new Set());
     }, [searchTerm]);
     
@@ -142,7 +137,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         }
     }, [quickViewTab]);
 
-    // ... Filter & Sort Logic (Keep same) ...
     const processedCandidates = useMemo(() => {
         let filtered = candidates;
         if (searchTerm) {
@@ -322,7 +316,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         setEditingId(candidate.id);
         setFormData({ ...candidate });
         setError(null);
-        setGdprConsent(true); // Assuming consent was already given for existing records
+        setGdprConsent(true);
         setIsModalOpen(true);
         setViewingCandidate(null);
     };
@@ -343,11 +337,9 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             const reader = new FileReader();
             reader.onload = async () => {
                 const res = reader.result;
-                // Safe check to ensure we have a string result
                 if (typeof res === 'string') {
                     const base64String = res.split(',')[1] || '';
                     try {
-                        // Force string types to avoid TS errors
                         const parsedData = await parseCV(base64String, file.type);
                         setFormData(prev => ({
                             ...prev,
@@ -385,8 +377,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                         createdAt: Date.now()
                     };
                     await addCandidateAttachment(viewingCandidate.id, attachment);
-                    
-                    // UPDATE LOCAL STATE IMMEDIATELY FOR UI FEEDBACK
                     setViewingCandidate(prev => prev ? {
                         ...prev,
                         attachments: [...(prev.attachments || []), attachment]
@@ -396,7 +386,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
             reader.readAsDataURL(file);
         }
         
-        // Timeout to allow upload processing
         setTimeout(refreshData, 1000);
         if(attachmentInputRef.current) attachmentInputRef.current.value = '';
     };
@@ -455,7 +444,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         setViewingCandidate(prev => prev ? { ...prev, comments: [...(prev.comments || []), comment] } : null);
         setNewComment('');
         refreshData();
-        // Keep focus
         setTimeout(() => commentInputRef.current?.focus(), 100);
     };
 
@@ -473,9 +461,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
         }
     };
 
-    // --- Render Helper for Sort Header ---
     const SortHeader = ({ label, sortKey, className = '' }: { label: string, sortKey: string, className?: string }) => (
-        <th className={`p-4 font-semibold cursor-pointer hover:bg-stone-50 transition-colors group select-none ${className}`} onClick={() => handleSort(sortKey)}>
+        <th className={`p-4 font-semibold cursor-pointer hover:bg-stone-100 transition-colors group select-none text-stone-600 ${className}`} onClick={() => handleSort(sortKey)}>
             <div className="flex items-center gap-1">
                 {label}
                 <div className="flex flex-col">
@@ -487,7 +474,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
     );
 
     return (
-        <div className="p-8 h-full overflow-y-auto flex flex-col">
+        <div className="p-8 h-full overflow-y-auto flex flex-col bg-stone-50/50">
             {/* --- HEADER & TOOLBAR --- */}
             <div className="flex justify-between items-start mb-6 gap-4 flex-wrap">
                 <div>
@@ -496,7 +483,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                 </div>
                 
                 <div className="flex items-center gap-3 flex-1 max-w-xl justify-end">
-                    {/* View Toggle */}
                     <div className="flex bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-stone-200">
                          <button 
                             onClick={() => setViewMode('card')}
@@ -520,7 +506,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                             ref={searchInputRef}
                             type="text" 
                             placeholder="Cerca per nome, skills, email..." 
-                            className="w-full pl-10 pr-4 py-2.5 bg-white/50 backdrop-blur-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none shadow-sm transition-all text-stone-800"
+                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm transition-all text-stone-800"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -529,7 +515,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                     <input type="file" multiple accept=".pdf,image/*" className="hidden" ref={bulkInputRef} onChange={handleBulkFileSelect} />
                     <button 
                         onClick={() => bulkInputRef.current?.click()}
-                        className="bg-white/80 backdrop-blur-md border border-stone-200 text-stone-700 hover:bg-stone-50 hover:text-emerald-700 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-sm shrink-0 font-medium"
+                        className="bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 hover:text-emerald-700 px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-sm shrink-0 font-medium"
                     >
                         <UploadCloud size={20} className="text-emerald-600" />
                         Importa
@@ -547,7 +533,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
 
             {/* BULK ACTIONS BAR */}
             {viewMode === 'grid' && selectedIds.size > 0 && (
-                <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl mb-4 flex items-center justify-between animate-in slide-in-from-top-2">
+                <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl mb-4 flex items-center justify-between animate-in slide-in-from-top-2 shadow-sm">
                     <div className="flex items-center gap-4">
                         <span className="font-bold text-emerald-900 text-sm px-2">{selectedIds.size} selezionati</span>
                         <div className="h-4 w-px bg-emerald-200"></div>
@@ -563,7 +549,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                             <button 
                                 key={status}
                                 onClick={() => handleBulkStatusChange(status as CandidateStatus)}
-                                className={`text-[10px] px-2 py-1 rounded border ${CandidateStatusColors[status]} bg-white hover:brightness-95 shadow-sm`}
+                                className={`text-[10px] px-2 py-1 rounded border ${CandidateStatusColors[status]} bg-white hover:brightness-95 shadow-sm transition-transform hover:-translate-y-0.5`}
                             >
                                 {CandidateStatusLabels[status]}
                             </button>
@@ -579,9 +565,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                         <div 
                             key={candidate.id} 
                             onClick={() => openQuickView(candidate)}
-                            className="glass-card p-6 rounded-2xl hover:shadow-xl hover:-translate-y-1 transition-all group relative cursor-pointer flex flex-col border border-white/50"
+                            className="glass-card bg-white/70 p-6 rounded-2xl hover:shadow-xl hover:-translate-y-1 transition-all group relative cursor-pointer flex flex-col border border-white/50"
                         >
-                            {/* Status Badge */}
                             <div className={`absolute top-4 left-4 text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-sm ${CandidateStatusColors[candidate.status || CandidateStatus.CANDIDATE]}`}>
                                 {CandidateStatusLabels[candidate.status || CandidateStatus.CANDIDATE]}
                             </div>
@@ -654,13 +639,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                 </div>
             ) : (
                 /* --- GRID VIEW --- */
-                <div className="bg-white/70 backdrop-blur-xl border border-white rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="glass-card bg-white/70 backdrop-blur-xl border border-white rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
                     <div className="overflow-auto flex-1 custom-scrollbar">
                         <table className="w-full text-left border-collapse relative">
                             <thead className="bg-stone-50/90 backdrop-blur-md sticky top-0 z-10 shadow-sm text-xs text-stone-500 font-semibold uppercase tracking-wider">
                                 <tr>
                                     <th className="p-4 w-10">
-                                        <button onClick={toggleAll} className="flex items-center justify-center w-5 h-5 rounded border border-stone-300 bg-white hover:border-emerald-500">
+                                        <button onClick={toggleAll} className="flex items-center justify-center w-5 h-5 rounded border border-stone-300 bg-white hover:border-emerald-500 transition-colors">
                                             {selectedIds.size > 0 && selectedIds.size === processedCandidates.length && <CheckSquare size={14} className="text-emerald-600"/>}
                                             {selectedIds.size > 0 && selectedIds.size < processedCandidates.length && <Square size={10} className="text-emerald-600 fill-emerald-600"/>}
                                         </button>
@@ -701,21 +686,25 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                             <td className="p-4 text-stone-600">{candidate.email}</td>
                                             <td className="p-4 text-stone-600">{candidate.phone || '-'}</td>
                                             <td className="p-4" onClick={e => e.stopPropagation()}>
-                                                <select 
-                                                    value={candidate.status || CandidateStatus.CANDIDATE} 
-                                                    onChange={(e) => handleInlineStatusChange(candidate, e.target.value as CandidateStatus)}
-                                                    className={`text-xs font-bold px-2 py-1 rounded border outline-none cursor-pointer ${CandidateStatusColors[candidate.status || CandidateStatus.CANDIDATE]}`}
-                                                >
-                                                    {Object.values(CandidateStatus).map(s => (
-                                                        <option key={s} value={s}>{CandidateStatusLabels[s]}</option>
-                                                    ))}
-                                                </select>
+                                                <div className="relative">
+                                                     <select 
+                                                        value={candidate.status || CandidateStatus.CANDIDATE} 
+                                                        onChange={(e) => handleInlineStatusChange(candidate, e.target.value as CandidateStatus)}
+                                                        className={`appearance-none bg-transparent hover:bg-white/60 focus:bg-white border border-transparent focus:border-emerald-200 rounded px-2 py-1 text-xs font-bold outline-none cursor-pointer w-full transition-all ${CandidateStatusColors[candidate.status || CandidateStatus.CANDIDATE]}`}
+                                                    >
+                                                        {Object.values(CandidateStatus).map(s => (
+                                                            <option key={s} value={s}>{CandidateStatusLabels[s]}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
                                             </td>
-                                            <td className="p-4 text-stone-600 max-w-[150px] truncate" title={candidate.currentRole}>{candidate.currentRole || '-'}</td>
+                                            <td className="p-4 text-stone-600 max-w-[150px] truncate" title={candidate.currentRole}>
+                                                {candidate.currentRole || '-'}
+                                            </td>
                                             <td className="p-4 text-center font-bold text-emerald-600">{positionCount}</td>
-                                            <td className="p-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                                                <button onClick={(e) => {e.stopPropagation(); openEditModal(candidate)}} className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"><Pencil size={16}/></button>
-                                                <button onClick={(e) => requestDelete(e, candidate.id)} className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
+                                            <td className="p-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity justify-end" onClick={e => e.stopPropagation()}>
+                                                <button onClick={(e) => {e.stopPropagation(); openEditModal(candidate)}} className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Pencil size={16}/></button>
+                                                <button onClick={(e) => requestDelete(e, candidate.id)} className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 size={16}/></button>
                                             </td>
                                         </tr>
                                     );
@@ -742,7 +731,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                         
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
                             {!editingId && (
-                                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-start gap-4">
+                                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-start gap-4 shadow-sm">
                                     <div className="bg-white p-2 rounded-lg shadow-sm text-indigo-600"><Sparkles size={24}/></div>
                                     <div className="flex-1">
                                         <h4 className="font-bold text-indigo-900 text-sm mb-1">Autocompletamento AI + Foto</h4>
@@ -767,43 +756,43 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                             )}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div><label className="block text-sm font-bold text-stone-700 mb-1">Nome Completo</label><input required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white" /></div>
-                                <div><label className="block text-sm font-bold text-stone-700 mb-1">Email</label><input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white" /></div>
-                                <div><label className="block text-sm font-bold text-stone-700 mb-1">Telefono</label><input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white" /></div>
-                                <div><label className="block text-sm font-bold text-stone-700 mb-1">Età</label><input type="number" value={formData.age || ''} onChange={e => setFormData({...formData, age: parseInt(e.target.value) || undefined})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white" /></div>
-                                <div><label className="block text-sm font-bold text-stone-700 mb-1">Stato Candidato</label><select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as CandidateStatus})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white">{Object.values(CandidateStatus).map(s => (<option key={s} value={s}>{CandidateStatusLabels[s]}</option>))}</select></div>
+                                <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Nome Completo</label><input required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white placeholder-stone-400" placeholder="Mario Rossi" /></div>
+                                <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Email</label><input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white placeholder-stone-400" placeholder="email@esempio.com"/></div>
+                                <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Telefono</label><input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white placeholder-stone-400" placeholder="+39..." /></div>
+                                <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Età</label><input type="number" value={formData.age || ''} onChange={e => setFormData({...formData, age: parseInt(e.target.value) || undefined})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white" /></div>
+                                <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Stato Candidato</label><select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as CandidateStatus})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white">{Object.values(CandidateStatus).map(s => (<option key={s} value={s}>{CandidateStatusLabels[s]}</option>))}</select></div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-stone-700 mb-1">Skills (separate da virgola)</label>
+                                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Skills (separate da virgola)</label>
                                 <input 
                                     value={formData.skills?.join(', ')} 
                                     onChange={e => setFormData({...formData, skills: e.target.value.split(',').map(s => s.trim()).filter(s => s)})} 
-                                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white" 
+                                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 font-medium transition-all focus:bg-white placeholder-stone-400" 
                                     placeholder="React, TypeScript, Sales..."
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-stone-700 mb-1">Summary</label>
+                                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Summary</label>
                                 <textarea 
                                     value={formData.summary} 
                                     onChange={e => setFormData({...formData, summary: e.target.value})} 
-                                    className="w-full p-3 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none h-24 text-stone-900 font-medium resize-none transition-all focus:bg-white" 
+                                    className="w-full p-3 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none h-24 text-stone-900 font-medium resize-none transition-all focus:bg-white placeholder-stone-400" 
+                                    placeholder="Breve riepilogo del profilo..."
                                 />
                             </div>
 
-                            <div className="border-t border-stone-200 pt-4">
-                                <h4 className="text-sm font-bold text-stone-900 mb-3 uppercase tracking-wider">Attuale Occupazione</h4>
+                            <div className="border-t border-stone-100 pt-4">
+                                <h4 className="text-sm font-bold text-stone-900 mb-3 uppercase tracking-wider flex items-center gap-2"><Briefcase size={14} className="text-emerald-600"/> Attuale Occupazione</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div><label className="block text-xs font-bold text-stone-500 mb-1">Azienda attuale</label><input value={formData.currentCompany} onChange={e => setFormData({...formData, currentCompany: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900" /></div>
-                                    <div><label className="block text-xs font-bold text-stone-500 mb-1">Ruolo attuale</label><input value={formData.currentRole} onChange={e => setFormData({...formData, currentRole: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900" /></div>
-                                    <div><label className="block text-xs font-bold text-stone-500 mb-1">RAL (es. 35k)</label><input value={formData.currentSalary} onChange={e => setFormData({...formData, currentSalary: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900" /></div>
-                                    <div><label className="block text-xs font-bold text-stone-500 mb-1">Benefits (Auto, Buoni Pasto...)</label><input value={formData.benefits?.join(', ')} onChange={e => setFormData({...formData, benefits: e.target.value.split(',').map(s => s.trim()).filter(s => s)})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900" /></div>
+                                    <div><label className="block text-xs font-bold text-stone-500 mb-1">Azienda attuale</label><input value={formData.currentCompany} onChange={e => setFormData({...formData, currentCompany: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 transition-all focus:bg-white" /></div>
+                                    <div><label className="block text-xs font-bold text-stone-500 mb-1">Ruolo attuale</label><input value={formData.currentRole} onChange={e => setFormData({...formData, currentRole: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 transition-all focus:bg-white" /></div>
+                                    <div><label className="block text-xs font-bold text-stone-500 mb-1">RAL (es. 35k)</label><input value={formData.currentSalary} onChange={e => setFormData({...formData, currentSalary: e.target.value})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 transition-all focus:bg-white" /></div>
+                                    <div><label className="block text-xs font-bold text-stone-500 mb-1">Benefits</label><input value={formData.benefits?.join(', ')} onChange={e => setFormData({...formData, benefits: e.target.value.split(',').map(s => s.trim()).filter(s => s)})} className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-stone-900 transition-all focus:bg-white" /></div>
                                 </div>
                             </div>
 
-                            {/* GDPR CHECKBOX */}
                             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-3">
                                 <input 
                                     type="checkbox" 
@@ -814,13 +803,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                 />
                                 <label htmlFor="gdpr-consent" className="text-xs text-blue-800 font-medium cursor-pointer">
                                     <span className="font-bold flex items-center gap-1 mb-1"><ShieldCheck size={12}/> Consenso GDPR Obbligatorio</span>
-                                    Dichiaro di aver acquisito il consenso esplicito del candidato al trattamento dei dati personali ai fini della selezione, in conformità con la normativa vigente (GDPR).
+                                    Dichiaro di aver acquisito il consenso esplicito del candidato al trattamento dei dati personali ai fini della selezione.
                                 </label>
                             </div>
                             
                             {error && (
-                                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-100">
-                                    <AlertTriangle size={16} className="inline mr-2"/> {error}
+                                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-100 flex items-center gap-2">
+                                    <AlertTriangle size={16} className="shrink-0"/> {error}
                                 </div>
                             )}
 
@@ -832,7 +821,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                     className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 flex items-center gap-2 disabled:opacity-50 disabled:shadow-none transition-all"
                                 >
                                     {isSaving && <Loader2 size={16} className="animate-spin"/>}
-                                    {isSaving ? 'Salvataggio...' : 'Salva'}
+                                    {isSaving ? 'Salvataggio...' : 'Salva Profilo'}
                                 </button>
                             </div>
                         </form>
@@ -845,7 +834,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                 <div className="fixed inset-0 bg-stone-900/30 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => setViewingCandidate(null)}>
                     <div className="bg-white/95 h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-2xl border-l border-white" onClick={e => e.stopPropagation()}>
                         <div className="flex flex-1 overflow-hidden h-full">
-                            {/* MAIN COLUMN */}
                             <div className="flex flex-col h-full overflow-hidden w-full">
                                 <div className="p-6 border-b border-stone-100 bg-stone-50/80 shrink-0">
                                     <div className="flex justify-between items-start mb-4">
@@ -962,10 +950,10 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ candidates, jobs, 
                                     {quickViewTab === 'processes' && (
                                         <div className="space-y-4">
                                             <h4 className="text-xs font-bold text-stone-400 uppercase mb-3">Storico Candidature</h4>
-                                            {applications.filter(a => a.candidateId === viewingCandidate.id).length === 0 ? <p className="text-stone-400 italic text-sm">Nessuna candidatura attiva.</p> : applications.filter(a => a.candidateId === viewingCandidate.id).map(app => {
+                                            {applications.filter(a => a.candidateId === viewingCandidate.id).length === 0 ? <p className="text-stone-400 italic text-sm border-2 border-dashed border-stone-100 rounded-xl py-6 text-center">Nessuna candidatura attiva.</p> : applications.filter(a => a.candidateId === viewingCandidate.id).map(app => {
                                                 const job = jobs.find(j => j.id === app.jobId);
                                                 return (
-                                                    <div key={app.id} className="border border-stone-200 rounded-xl p-4 bg-white shadow-sm">
+                                                    <div key={app.id} className="border border-stone-200 rounded-xl p-4 bg-white shadow-sm hover:bg-stone-50 transition-colors">
                                                         <div className="flex justify-between items-start mb-2"><h5 className="font-bold text-stone-900 font-serif">{job?.title}</h5><span className={`text-[10px] px-2 py-0.5 rounded border ${StatusColors[app.status]}`}>{StatusLabels[app.status]}</span></div>
                                                         <p className="text-xs text-stone-500 mb-3">{job?.department}</p>
                                                         {app.rating && <div className="flex items-center gap-1 text-amber-500 text-xs font-bold"><Star size={12} fill="currentColor"/> {app.rating}/5</div>}

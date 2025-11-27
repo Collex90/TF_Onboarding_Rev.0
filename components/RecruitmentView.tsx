@@ -12,7 +12,6 @@ interface RecruitmentViewProps {
     onUpload: (files: File[], jobId?: string) => void;
 }
 
-// Helper for file icons (Same as CandidateView)
 const getFileIcon = (mimeType: string) => {
     if (mimeType.includes('pdf')) return <FileText size={16} className="text-red-500"/>;
     if (mimeType.includes('sheet') || mimeType.includes('excel')) return <Table size={16} className="text-emerald-600"/>;
@@ -20,7 +19,6 @@ const getFileIcon = (mimeType: string) => {
     return <FileText size={16} className="text-stone-500"/>;
 };
 
-// Job Status Configuration for UI
 const JOB_STATUS_CONFIG: Record<string, { label: string, color: string, dot: string }> = {
     'OPEN': { label: 'APERTA', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100', dot: 'bg-green-500' },
     'SUSPENDED': { label: 'SOSPESA', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100', dot: 'bg-orange-500' },
@@ -31,7 +29,7 @@ const JOB_STATUS_CONFIG: Record<string, { label: string, color: string, dot: str
 export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshData, currentUser, onUpload }) => {
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [isJobModalOpen, setIsJobModalOpen] = useState(false);
-    const [viewingJobInfoId, setViewingJobInfoId] = useState<string | null>(null); // TRACKS WHICH JOB INFO IS OPEN
+    const [viewingJobInfoId, setViewingJobInfoId] = useState<string | null>(null);
     const [editingJobId, setEditingJobId] = useState<string | null>(null);
     const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -50,49 +48,40 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const [newComment, setNewComment] = useState('');
     const [isPhotoZoomed, setIsPhotoZoomed] = useState(false);
 
-    // DELETE JOB STATES
     const [jobToDeleteId, setJobToDeleteId] = useState<string | null>(null);
     const [isDeletingJob, setIsDeletingJob] = useState(false);
     
-    // EMAIL STATE
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
     const [emailTemplates] = useState<EmailTemplate[]>(getEmailTemplates());
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>(emailTemplates[0]?.id || '');
     const [emailSubject, setEmailSubject] = useState('');
     const [emailBody, setEmailBody] = useState('');
     
-    // JOB MODAL & SCORECARD
     const [jobForm, setJobForm] = useState<{ title: string, department: string, description: string, requirements: string, status: any, scorecardSchema?: ScorecardSchema }>({ title: '', department: '', description: '', requirements: '', status: 'OPEN', scorecardSchema: undefined });
     const [isGeneratingJob, setIsGeneratingJob] = useState(false);
     const [isGeneratingScorecard, setIsGeneratingScorecard] = useState(false);
     const [availableUsers, setAvailableUsers] = useState<User[]>([]);
     const [assignedTeamMembers, setAssignedTeamMembers] = useState<string[]>([]);
     
-    // NEW: BACKGROUND PROCESSING STATE
-    const [processingJobs, setProcessingJobs] = useState<Set<string>>(new Set()); // Tracks jobs doing AI updates in background
-    const [isRecalculating, setIsRecalculating] = useState(false); // Keep for local modal usage if needed
+    const [processingJobs, setProcessingJobs] = useState<Set<string>>(new Set());
+    const [isRecalculating, setIsRecalculating] = useState(false);
 
-    // SCORECARD TEMPLATES STATE (Management)
     const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
     const [isLoadTemplateModalOpen, setIsLoadTemplateModalOpen] = useState(false);
     const [templateName, setTemplateName] = useState('');
     const [templates, setTemplates] = useState<ScorecardTemplate[]>([]);
     
-    // TEMPLATE MANAGER (Moved from Settings)
     const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<ScorecardTemplate | null>(null);
     const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
 
-    // COMPARISON MATRIX
     const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
     const [matrixSelectedCandidateIds, setMatrixSelectedCandidateIds] = useState<Set<string>>(new Set());
     const [isMatrixCandidateFilterOpen, setIsMatrixCandidateFilterOpen] = useState(false);
     const [matrixStatusFilter, setMatrixStatusFilter] = useState<SelectionStatus[]>([]);
 
-    // KANBAN DRAG STATE
     const [dragOverColumn, setDragOverColumn] = useState<SelectionStatus | null>(null);
 
-    // CUSTOM DROPDOWN STATE
     const [isJobStatusDropdownOpen, setIsJobStatusDropdownOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -100,13 +89,11 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const searchInputRef = useRef<HTMLInputElement>(null);
     const isMounted = useRef(true);
 
-    // Helper to get the job object for the info modal
     const jobInfoTarget = useMemo(() => {
         if (!viewingJobInfoId) return null;
         return data.jobs.find(j => j.id === viewingJobInfoId);
     }, [viewingJobInfoId, data.jobs]);
 
-    // Autofocus on search input when component mounts
     useEffect(() => {
         isMounted.current = true;
         if (!selectedJobId) {
@@ -129,7 +116,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         }
     }, [isJobModalOpen, currentUser]);
 
-    // Load templates when manager or modal opens
     useEffect(() => {
         if (isTemplateManagerOpen || isLoadTemplateModalOpen) {
             getScorecardTemplates().then(setTemplates);
@@ -157,14 +143,12 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         setIsJobModalOpen(true);
     };
 
-    // NEW: Trigger Modal
     const promptDeleteJob = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         e.preventDefault();
         setJobToDeleteId(id);
     };
 
-    // NEW: Action
     const confirmDeleteJob = async () => {
         if (!jobToDeleteId) return;
         setIsDeletingJob(true);
@@ -181,7 +165,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         }
     };
 
-    // Scorecard Edit Handlers (Job Modal)
     const handleAddCategory = () => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: [ ...(prev.scorecardSchema?.categories || []), { id: generateId(), name: 'Nuova Categoria', items: [] } ] } })); };
     const handleDeleteCategory = (catId: string) => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: (prev.scorecardSchema?.categories || []).filter(c => c.id !== catId) } })); };
     const handleUpdateCategoryName = (catId: string, newName: string) => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: (prev.scorecardSchema?.categories || []).map(c => c.id === catId ? { ...c, name: newName } : c) } })); };
@@ -189,17 +172,12 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const handleDeleteItem = (catId: string, itemId: string) => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: (prev.scorecardSchema?.categories || []).map(c => c.id === catId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c) } })); };
     const handleUpdateItemLabel = (catId: string, itemId: string, newLabel: string) => { setJobForm(prev => ({ ...prev, scorecardSchema: { categories: (prev.scorecardSchema?.categories || []).map(c => c.id === catId ? { ...c, items: c.items.map(i => i.id === itemId ? { ...i, label: newLabel } : i) } : c) } })); };
 
-    // --- BACKGROUND AI PROCESSOR ---
     const runBackgroundFitUpdate = async (jobId: string, updatedJob: JobPosition) => {
         setProcessingJobs(prev => new Set(prev).add(jobId));
-        
-        // Find applications in current data snapshot (might be slightly stale but ok for IDs)
         const jobApps = data.applications.filter(a => a.jobId === jobId);
         
-        console.log(`[AI Background] Starting update for job ${jobId}, candidates: ${jobApps.length}`);
-
         for (const app of jobApps) {
-            if (!isMounted.current) break; // Stop if component unmounts
+            if (!isMounted.current) break; 
             
             const candidate = data.candidates.find(c => c.id === app.candidateId);
             if (candidate) {
@@ -210,7 +188,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     console.error(`[AI Background] Failed for app ${app.id}`, e);
                 }
             }
-            // Small delay to yield to UI
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
@@ -220,7 +197,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 next.delete(jobId);
                 return next;
             });
-            refreshData(); // Refresh UI once done
+            refreshData(); 
         }
     };
 
@@ -240,10 +217,9 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 );
 
                 await updateJob(updatedJob);
-                setIsJobModalOpen(false); // Close immediately
+                setIsJobModalOpen(false); 
 
                 if (contentChanged) {
-                    // Run detached background process
                     runBackgroundFitUpdate(editingJobId, updatedJob);
                 }
                 refreshData();
@@ -264,7 +240,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         if (!jobForm.title || !jobForm.department) { alert("Inserisci Titolo e Dipartimento."); return; } 
         setIsGeneratingJob(true); 
         try { 
-            // PASS COMPANY CONTEXT
             const details = await generateJobDetails(jobForm.title, jobForm.department, data.companyInfo); 
             setJobForm(prev => ({ ...prev, description: details.description, requirements: details.requirements })); 
         } catch (e) { alert("Errore AI: impossibile generare dettagli."); } finally { setIsGeneratingJob(false); } 
@@ -274,18 +249,15 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         if (!jobForm.title || !jobForm.description) { alert("Inserisci Titolo e Descrizione prima di generare la scheda."); return; } 
         setIsGeneratingScorecard(true); 
         try { 
-            // PASS COMPANY CONTEXT
             const schema = await generateScorecardSchema(jobForm.title, jobForm.description, data.companyInfo); 
             setJobForm(prev => ({ ...prev, scorecardSchema: schema })); 
         } catch(e) { alert("Errore AI Scorecard."); } finally { setIsGeneratingScorecard(false); } 
     };
 
-    // --- TEMPLATE MANAGEMENT LOGIC ---
     const handleOpenSaveTemplate = () => { if (!jobForm.scorecardSchema?.categories.length) { alert("La scheda è vuota. Aggiungi categorie prima di salvare."); return; } setTemplateName(''); setIsSaveTemplateModalOpen(true); };
     const handleConfirmSaveTemplate = async () => { if (!templateName.trim() || !jobForm.scorecardSchema) return; await saveScorecardTemplate(templateName, jobForm.scorecardSchema); setIsSaveTemplateModalOpen(false); };
     const handleOpenLoadTemplate = async () => { const tmpls = await getScorecardTemplates(); setTemplates(tmpls); setIsLoadTemplateModalOpen(true); };
     
-    // FIXED: Load Template directly without confirm to prevent blocking
     const handleLoadTemplate = (template: ScorecardTemplate) => { 
         setJobForm(prev => ({ ...prev, scorecardSchema: template.schema })); 
         setIsLoadTemplateModalOpen(false); 
@@ -293,7 +265,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     
     const handleDeleteTemplate = async (id: string) => { if (confirm("Eliminare questo modello definitivamente?")) { await deleteScorecardTemplate(id); setTemplates(prev => prev.filter(t => t.id !== id)); } };
 
-    // --- NEW TEMPLATE MANAGER FUNCTIONS ---
     const openNewTemplate = () => {
         setEditingTemplate({ id: generateId(), name: 'Nuovo Modello', schema: { categories: [] }, createdAt: Date.now() });
         setIsTemplateEditorOpen(true);
@@ -306,7 +277,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         setIsTemplateEditorOpen(false);
     };
     
-    // Helpers for Template Editor (Duplicated logic for independence)
     const handleTemplateAddCategory = () => { setEditingTemplate(prev => prev ? { ...prev, schema: { categories: [...prev.schema.categories, { id: generateId(), name: 'Nuova Categoria', items: [] }] } } : null); };
     const handleTemplateDeleteCategory = (id: string) => { setEditingTemplate(prev => prev ? { ...prev, schema: { categories: prev.schema.categories.filter(c => c.id !== id) } } : null); };
     const handleTemplateUpdateCategory = (id: string, name: string) => { setEditingTemplate(prev => prev ? { ...prev, schema: { categories: prev.schema.categories.map(c => c.id === id ? { ...c, name } : c) } } : null); };
@@ -315,7 +285,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     const handleTemplateUpdateItem = (catId: string, itemId: string, label: string) => { setEditingTemplate(prev => prev ? { ...prev, schema: { categories: prev.schema.categories.map(c => c.id === catId ? { ...c, items: c.items.map(i => i.id === itemId ? { ...i, label } : i) } : c) } } : null); };
 
 
-    // ... (Standard handlers kept same)
     const handleBatchAddToPipeline = async () => { 
         if (!selectedJobId || selectedAssociateIds.size === 0) return; 
         setIsAssociating(true); 
@@ -328,7 +297,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 let aiReasoning: string | undefined; 
                 if (candidate) { 
                     try { 
-                        // PASS COMPANY CONTEXT
                         const fit = await evaluateFit(candidate, job, data.companyInfo); 
                         aiScore = fit.score; 
                         aiReasoning = fit.reasoning; 
@@ -353,7 +321,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         if (!job || !candidate) return; 
         setEvaluatingId(appId); 
         try { 
-            // PASS COMPANY CONTEXT
             const result = await evaluateFit(candidate, job, data.companyInfo); 
             updateApplicationAiScore(appId, result.score, result.reasoning); 
             if (viewingApp && viewingApp.app.id === appId) {
@@ -369,14 +336,12 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     };
     
     const handleDragStart = (e: React.DragEvent, appId: string) => { setDraggedAppId(appId); e.dataTransfer.effectAllowed = 'move'; };
-    // MODIFIED DRAG HANDLERS FOR BETTER VISUALS
     const handleDragOver = (e: React.DragEvent, status: SelectionStatus) => { 
         e.preventDefault(); 
         e.dataTransfer.dropEffect = 'move'; 
         if (dragOverColumn !== status) setDragOverColumn(status);
     };
     const handleDragLeave = (e: React.DragEvent) => {
-        // Only clear if leaving the column entirely (optional logic could be added here)
     };
     const handleDrop = (e: React.DragEvent, status: SelectionStatus) => { 
         e.preventDefault(); 
@@ -453,7 +418,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         }
     };
 
-    // ATTACHMENT HANDLERS (New for Recruitment View)
     const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if(!viewingApp || !e.target.files?.length || !currentUser) return;
         const files: File[] = Array.from(e.target.files);
@@ -471,7 +435,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     createdAt: Date.now()
                 };
                 await addCandidateAttachment(viewingApp.candidate.id, attachment);
-                // Optimistic UI update
                 setViewingApp(prev => prev ? { ...prev, candidate: { ...prev.candidate, attachments: [...(prev.candidate.attachments || []), attachment] } } : null);
             };
             reader.readAsDataURL(file);
@@ -488,8 +451,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         refreshData();
     };
 
-
-    // SCORECARD VOTE
     const handleScorecardVote = async (itemId: string, score: number) => {
         if (!viewingApp) return;
         const currentResults = viewingApp.app.scorecardResults || {};
@@ -499,13 +460,11 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         refreshData();
     };
 
-    // EMAIL LOGIC
     const openEmailModal = () => { if (!viewingApp) return; const tmpl = emailTemplates[0]; setSelectedTemplateId(tmpl.id); updateEmailContent(tmpl.id); setIsEmailModalOpen(true); };
     const updateEmailContent = (tmplId: string) => { const tmpl = emailTemplates.find(t => t.id === tmplId); if (!tmpl || !viewingApp) return; const job = data.jobs.find(j => j.id === viewingApp.app.jobId); const candidateName = viewingApp.candidate.fullName; const jobTitle = job?.title || 'Posizione'; let subj = tmpl.subject.replace('{candidateName}', candidateName).replace('{jobTitle}', jobTitle); let body = tmpl.body.replace('{candidateName}', candidateName).replace('{jobTitle}', jobTitle); setEmailSubject(subj); setEmailBody(body); };
     const handleTemplateChange = (id: string) => { setSelectedTemplateId(id); updateEmailContent(id); };
     const handleSendEmail = () => { if (!viewingApp) return; const mailtoLink = `mailto:${viewingApp.candidate.email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`; window.location.href = mailtoLink; setIsEmailModalOpen(false); };
 
-    // ... (filtering logic)
     const filteredJobs = useMemo(() => { let jobs = data.jobs; if (currentUser?.role === UserRole.TEAM) { jobs = jobs.filter(job => job.assignedTeamMembers?.includes(currentUser.uid || '')); } if (!searchTerm) return jobs; const lowerTerm = searchTerm.toLowerCase(); return jobs.filter(job => { if (job.title.toLowerCase().includes(lowerTerm) || job.department.toLowerCase().includes(lowerTerm)) return true; const jobApps = data.applications.filter(a => a.jobId === job.id); return jobApps.some(app => { const candidate = data.candidates.find(c => c.id === app.candidateId); return candidate && (candidate.fullName.toLowerCase().includes(lowerTerm) || candidate.email.toLowerCase().includes(lowerTerm) || candidate.skills.some(s => s.toLowerCase().includes(lowerTerm))); }); }); }, [data.jobs, data.applications, data.candidates, searchTerm, currentUser]);
     const selectedJob = filteredJobs.find(j => j.id === selectedJobId);
     
@@ -548,9 +507,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     
     const availableCandidates = useMemo(() => { if (!selectedJobId) return []; const term = associateSearch.toLowerCase(); return data.candidates.filter(c => { const alreadyApplied = data.applications.some(a => a.candidateId === c.id && a.jobId === selectedJobId); if (alreadyApplied) return false; if (term && !c.fullName.toLowerCase().includes(term) && !c.email.toLowerCase().includes(term)) return false; return true; }); }, [data.candidates, data.applications, selectedJobId, associateSearch]);
     
-    const SortHeader = ({ label, sortKey }: { label: string, sortKey: string }) => ( <th className="p-4 font-semibold cursor-pointer hover:bg-stone-50 transition-colors group select-none" onClick={() => handleSort(sortKey)}> <div className="flex items-center gap-1">{label}<div className="flex flex-col"><ChevronUp size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'asc' ? 'text-emerald-600' : 'text-stone-300'} /><ChevronDown size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'desc' ? 'text-emerald-600' : 'text-stone-300'} /></div></div> </th> );
+    const SortHeader = ({ label, sortKey }: { label: string, sortKey: string }) => ( <th className="p-4 font-semibold cursor-pointer hover:bg-stone-100 transition-colors group select-none text-stone-600" onClick={() => handleSort(sortKey)}> <div className="flex items-center gap-1">{label}<div className="flex flex-col"><ChevronUp size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'asc' ? 'text-emerald-600' : 'text-stone-300'} /><ChevronDown size={10} className={sortConfig?.key === sortKey && sortConfig.direction === 'desc' ? 'text-emerald-600' : 'text-stone-300'} /></div></div> </th> );
     
-    // ... (RadarChart and Matrix components kept same)
     const RadarChart = ({ candidates, schema }: { candidates: { name: string, color: string, results: Record<string,number> }[], schema: ScorecardSchema }) => {
         if (!schema || candidates.length === 0) return null;
         
@@ -635,7 +593,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
         return (
             <div 
-                className={`min-w-[320px] w-[320px] max-w-[320px] rounded-xl p-4 flex flex-col gap-3 h-full max-h-[calc(100vh-200px)] transition-all duration-300 backdrop-blur-sm ${isRejectedCol ? 'bg-red-50/50 border border-red-100' : 'bg-stone-100/60 border border-stone-200'} ${isDragOver ? 'bg-emerald-100/60 border-emerald-300 ring-2 ring-emerald-200 shadow-md' : ''}`} 
+                className={`min-w-[320px] w-[320px] max-w-[320px] rounded-2xl p-4 flex flex-col gap-3 h-full max-h-[calc(100vh-200px)] transition-all duration-300 backdrop-blur-sm border ${isRejectedCol ? 'bg-red-50/50 border-red-100' : 'bg-white/40 border-stone-200'} ${isDragOver ? 'bg-emerald-100/60 border-emerald-300 ring-2 ring-emerald-200 shadow-md' : ''}`} 
                 onDragOver={(e) => handleDragOver(e, status)} 
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, status)}
@@ -654,7 +612,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         const maxScore = selectedJob?.scorecardSchema ? selectedJob.scorecardSchema.categories.reduce((acc, cat) => acc + cat.items.length * 5, 0) : 0;
 
                         return (
-                            <div key={app.id} draggable onDragStart={(e) => handleDragStart(e, app.id)} onClick={() => openQuickView(app, candidate)} className={`glass-card bg-white/80 p-4 rounded-xl shadow-sm border border-white/50 hover:shadow-lg transition-all cursor-pointer active:cursor-grabbing relative group ${isDragging ? 'opacity-50 scale-95 ring-2 ring-emerald-400' : ''}`}>
+                            <div key={app.id} draggable onDragStart={(e) => handleDragStart(e, app.id)} onClick={() => openQuickView(app, candidate)} className={`glass-card bg-white p-4 rounded-xl shadow-sm border border-stone-100 hover:shadow-lg transition-all cursor-pointer active:cursor-grabbing relative group ${isDragging ? 'opacity-50 scale-95 ring-2 ring-emerald-400' : ''}`}>
                                 {priorityColor && <div className={`absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded border ${priorityColor}`}>{app.priority}</div>}
                                 <div className="flex justify-between items-start mb-2 pr-8"><div className="flex items-center gap-2 min-w-0"><GripVertical size={14} className="text-stone-300 shrink-0" /><div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center shrink-0 overflow-hidden border border-stone-200 hover:ring-2 hover:ring-emerald-200 transition-all" onClick={(e) => { e.stopPropagation(); setViewingApp({ app, candidate }); setIsPhotoZoomed(true); }}>{candidate.photo ? <img src={`data:image/jpeg;base64,${candidate.photo}`} className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-emerald-600">{candidate.fullName.charAt(0)}</span>}</div><h5 className="font-bold text-stone-800 truncate text-sm font-serif">{candidate.fullName}</h5></div></div>
                                 <div className="flex items-center gap-2 mb-2 text-xs text-stone-500 pl-6">{candidate.age && <span className="flex items-center gap-1 bg-stone-100 px-1.5 py-0.5 rounded"><Calendar size={10}/> {candidate.age}</span>}{app.rating && <span className="flex items-center gap-1 text-amber-500 font-medium"><Star size={10} fill="currentColor" /> {app.rating}</span>}</div>
@@ -673,22 +631,21 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
     };
 
     if (!selectedJobId) {
-        // ... (Job selection view)
         return (
-            <div className="p-8 h-full overflow-y-auto">
+            <div className="p-8 h-full overflow-y-auto bg-stone-50/50">
                 <div className="flex justify-between items-start mb-8 gap-4 flex-wrap">
                     <div><h2 className="text-3xl font-bold text-stone-800 font-serif">Posizioni Aperte</h2><p className="text-stone-500 mt-1">Seleziona una posizione per gestire la pipeline.</p></div>
                     <div className="flex items-center gap-3 flex-1 max-w-xl justify-end">
-                        <div className="relative flex-1 max-w-md group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 group-hover:text-emerald-500 transition-colors" size={18} /><input ref={searchInputRef} type="text" placeholder="Cerca posizioni o candidati..." className="w-full pl-10 pr-4 py-2.5 bg-white/50 backdrop-blur-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none shadow-sm transition-all text-stone-800" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                        <div className="relative flex-1 max-w-md group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 group-hover:text-emerald-500 transition-colors" size={18} /><input ref={searchInputRef} type="text" placeholder="Cerca posizioni o candidati..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm transition-all text-stone-800" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
                         {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
                             <>
-                                <button onClick={() => setIsTemplateManagerOpen(true)} className="bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 hover:text-emerald-700 px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm shrink-0 font-medium transition-colors"><ListChecks size={20}/> Libreria</button>
+                                <button onClick={() => setIsTemplateManagerOpen(true)} className="bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 hover:text-emerald-700 px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm shrink-0 font-medium transition-colors"><ListChecks size={20}/> Libreria</button>
                                 <button onClick={openCreateJobModal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-200 shrink-0 font-bold transition-all"><Plus size={20} /> Nuova</button>
                             </>
                         )}
                     </div>
                 </div>
-                {/* ... Job Grid ... */}
+                
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-10">
                     {filteredJobs.map(job => {
                         const jobApps = data.applications.filter(a => a.jobId === job.id);
@@ -699,7 +656,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         const isProcessing = processingJobs.has(job.id);
 
                         return (
-                            <div key={job.id} onClick={() => setSelectedJobId(job.id)} className="glass-card p-6 rounded-2xl hover:shadow-xl hover:-translate-y-1 border border-white/50 cursor-pointer transition-all group flex flex-col relative">
+                            <div key={job.id} onClick={() => setSelectedJobId(job.id)} className="glass-card bg-white/70 p-6 rounded-2xl hover:shadow-xl hover:-translate-y-1 border border-white/50 cursor-pointer transition-all group flex flex-col relative">
                                 {currentUser?.role === UserRole.TEAM && isAssigned && (<div className="absolute top-0 right-0 rounded-bl-xl rounded-tr-2xl text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 font-bold flex items-center gap-1 border-b border-l border-indigo-100"><Shield size={10}/> ASSEGNATO</div>)}
                                 <div className="flex justify-between items-start mb-2 pr-20"><h3 className="text-xl font-bold text-stone-800 group-hover:text-emerald-700 transition-colors font-serif">{job.title}</h3><span className={`text-xs px-2 py-1 rounded-full font-medium ${job.status === 'OPEN' ? 'bg-green-100 text-green-800' : job.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800' : 'bg-stone-100 text-stone-700'}`}>{job.status}</span></div>
                                 <p className="text-stone-500 text-sm mb-4 font-medium">{job.department}</p>
@@ -712,7 +669,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
                                 <div className="mt-auto flex justify-between items-center text-sm pt-4 border-t border-white/60"><div className="flex gap-4 text-xs"><span className="font-bold text-stone-700">{activeCount} <span className="text-stone-400 font-normal">Attivi</span></span><span className="font-bold text-emerald-700">{hiredCount} <span className="text-stone-400 font-normal">Assunti</span></span><span className="font-bold text-red-700">{rejectedCount} <span className="text-stone-400 font-normal">Scartati</span></span></div>
                                 <div className="flex gap-2">
-                                    {/* QUICK INFO BUTTON */}
                                     <button 
                                         onClick={(e) => { e.stopPropagation(); setViewingJobInfoId(job.id); }}
                                         className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
@@ -735,7 +691,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     })}
                 </div>
                 
-                {/* ... Job Modals (create/edit/template manager) ... */}
+                {/* ... Job Modals ... */}
                 {isJobModalOpen && (
                     <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                          <div className="bg-white rounded-2xl p-6 w-full max-w-4xl m-auto shadow-2xl animate-in zoom-in-95 duration-200 border border-white/50">
@@ -743,15 +699,14 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             <form onSubmit={handleSaveJob} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-4">
-                                        <div><label className="block text-sm font-bold text-stone-700 mb-1">Titolo Posizione</label><input required value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all" placeholder="es. Senior React Dev" /></div>
-                                        <div><label className="block text-sm font-bold text-stone-700 mb-1">Dipartimento</label><input required value={jobForm.department} onChange={e => setJobForm({...jobForm, department: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all" placeholder="es. Engineering" /></div>
+                                        <div><label className="block text-sm font-bold text-stone-700 mb-1">Titolo Posizione</label><input required value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all placeholder-stone-400" placeholder="es. Senior React Dev" /></div>
+                                        <div><label className="block text-sm font-bold text-stone-700 mb-1">Dipartimento</label><input required value={jobForm.department} onChange={e => setJobForm({...jobForm, department: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all placeholder-stone-400" placeholder="es. Engineering" /></div>
                                         {editingJobId && (<div><label className="block text-sm font-bold text-stone-700 mb-1">Stato</label><select value={jobForm.status} onChange={(e) => setJobForm({...jobForm, status: e.target.value as any})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 text-stone-900 transition-all"><option value="OPEN">APERTA</option><option value="SUSPENDED">SOSPESA</option><option value="COMPLETED">COMPLETATA</option><option value="CLOSED">CHIUSA</option></select></div>)}
                                         <div><label className="block text-sm font-bold text-stone-700 mb-2 flex items-center gap-2"><Users size={16} className="text-emerald-600"/> Assegna Team</label><div className="border border-stone-200 rounded-lg max-h-40 overflow-y-auto p-2 bg-stone-50 custom-scrollbar">{availableUsers.length === 0 ? <p className="text-xs text-stone-400 text-center py-2">Nessun utente disponibile</p> : availableUsers.map(u => (<div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer transition-colors" onClick={() => { const has = assignedTeamMembers.includes(u.uid || ''); setAssignedTeamMembers(prev => has ? prev.filter(id => id !== u.uid) : [...prev, u.uid || '']); }}><div className={`w-4 h-4 border rounded flex items-center justify-center ${assignedTeamMembers.includes(u.uid || '') ? 'bg-emerald-600 border-emerald-600' : 'border-stone-300 bg-white'}`}>{assignedTeamMembers.includes(u.uid || '') && <CheckSquare size={12} className="text-white"/>}</div><span className="text-sm text-stone-800">{u.name} <span className="text-xs text-stone-400">({u.role})</span></span></div>))}</div></div>
                                          <div className="pt-2"><button type="button" onClick={handleGenerateJobAI} disabled={isGeneratingJob || !jobForm.title || !jobForm.department} className="w-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-100 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm">{isGeneratingJob ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} Genera Descrizione con AI</button></div>
                                     </div>
-                                    <div className="space-y-4"><div><label className="block text-sm font-bold text-stone-700 mb-1">Descrizione</label><textarea required rows={6} value={jobForm.description} onChange={e => setJobForm({...jobForm, description: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all" placeholder="Descrizione del ruolo..." /></div><div><label className="block text-sm font-bold text-stone-700 mb-1">Requisiti</label><textarea required rows={6} value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all" placeholder="Lista requisiti..." /></div></div>
+                                    <div className="space-y-4"><div><label className="block text-sm font-bold text-stone-700 mb-1">Descrizione</label><textarea required rows={6} value={jobForm.description} onChange={e => setJobForm({...jobForm, description: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all placeholder-stone-400" placeholder="Descrizione del ruolo..." /></div><div><label className="block text-sm font-bold text-stone-700 mb-1">Requisiti</label><textarea required rows={6} value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full p-2.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-stone-50 focus:bg-white text-stone-900 transition-all placeholder-stone-400" placeholder="Lista requisiti..." /></div></div>
                                 </div>
-                                {/* ... Scorecard Editor ... */}
                                 <div className="border-t border-stone-100 pt-6">
                                     <div className="flex justify-between items-center mb-4">
                                         <h4 className="text-lg font-bold text-stone-900 flex items-center gap-2"><ListChecks size={20} className="text-emerald-600"/> Scheda di Valutazione</h4>
@@ -767,7 +722,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                             </button>
                                         </div>
                                     </div>
-                                    {/* ... scorecard editor content ... */}
                                     <div className="space-y-4">
                                         {jobForm.scorecardSchema?.categories.map(cat => (
                                             <div key={cat.id} className="border border-stone-200 rounded-lg p-4 bg-stone-50">
@@ -801,7 +755,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     </div>
                 )}
                 
-                {/* ... TEMPLATE MANAGER MODALS ... */}
+                {/* ... Template Manager Modals (using similar style) ... */}
+                {/* Save Template Modal */}
                 {isSaveTemplateModalOpen && (
                     <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[60] backdrop-blur-sm">
                         <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95">
@@ -814,7 +769,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         </div>
                     </div>
                 )}
-
+                {/* Load Template Modal */}
                 {isLoadTemplateModalOpen && (
                     <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[60] backdrop-blur-sm">
                         <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col animate-in zoom-in-95">
@@ -831,8 +786,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         </div>
                     </div>
                 )}
-
-                {/* TEMPLATE LIBRARY MANAGER */}
+                {/* Template Library Manager */}
                 {isTemplateManagerOpen && (
                     <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[60] backdrop-blur-sm">
                         <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-in zoom-in-95 border border-white/50">
@@ -849,7 +803,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         </div>
                     </div>
                 )}
-
+                {/* Template Editor */}
                 {isTemplateEditorOpen && editingTemplate && (
                     <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[70] backdrop-blur-sm">
                         <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col animate-in zoom-in-95">
@@ -874,12 +828,12 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     </div>
                 )}
 
-                {/* DELETE JOB CONFIRMATION MODAL */}
+                {/* DELETE JOB MODAL */}
                 {jobToDeleteId && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setJobToDeleteId(null)}>
-                        <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-stone-200" onClick={e => e.stopPropagation()}>
+                        <div className="glass-card bg-white/95 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-stone-200" onClick={e => e.stopPropagation()}>
                             <div className="flex flex-col items-center text-center">
-                                <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-600 border border-red-100">
+                                <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-600 border border-red-100 shadow-sm">
                                     <Trash2 size={24} />
                                 </div>
                                 <h3 className="text-lg font-bold text-stone-900 mb-2 font-serif">Elimina Posizione</h3>
@@ -888,14 +842,14 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 </p>
                                 <div className="flex gap-3 w-full">
                                     <button onClick={() => setJobToDeleteId(null)} disabled={isDeletingJob} className="flex-1 px-4 py-2 bg-stone-100 text-stone-700 rounded-xl font-medium hover:bg-stone-200 transition-colors disabled:opacity-50">Annulla</button>
-                                    <button onClick={confirmDeleteJob} disabled={isDeletingJob} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 shadow-md shadow-red-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">{isDeletingJob ? <Loader2 size={16} className="animate-spin"/> : 'Elimina'}</button>
+                                    <button onClick={confirmDeleteJob} disabled={isDeletingJob} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 shadow-lg shadow-red-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">{isDeletingJob ? <Loader2 size={16} className="animate-spin"/> : 'Elimina'}</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* JOB INFO QUICK VIEW OVERLAY - MOVED TO END TO RENDER OVER EVERYTHING */}
+                {/* JOB INFO QUICK VIEW */}
                 {viewingJobInfoId && jobInfoTarget && (
                     <div className="fixed inset-0 bg-stone-900/30 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }}>
                         <div className="bg-white/95 h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-lg border-l border-white" onClick={e => e.stopPropagation()}>
@@ -916,7 +870,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                     <ChevronDown size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
                                                 </button>
 
-                                                {/* CUSTOM DROPDOWN MENU */}
                                                 {isJobStatusDropdownOpen && (
                                                     <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-stone-100 overflow-hidden animate-in slide-in-from-top-2 z-[100]">
                                                         <div className="p-1">
@@ -950,7 +903,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 <button onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }} className="text-stone-400 hover:text-stone-600"><X size={24}/></button>
                             </div>
                             
-                            {/* ADDED EDIT BUTTON IN QUICK VIEW */}
                             {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
                                 <div className="px-6 pt-4">
                                     <button 
@@ -963,8 +915,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             )}
 
                             <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar space-y-6">
-                                
-                                {/* STATS DASHBOARD SECTION (NEW) */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
                                         <span className="text-xs font-bold text-blue-700 uppercase">Totale Candidati</span>
@@ -1004,8 +954,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* INFO SECTION */}
                                 <div className="grid grid-cols-2 gap-4 text-sm bg-stone-50 p-4 rounded-xl border border-stone-100">
                                     <div>
                                         <span className="block text-xs font-bold text-stone-400 uppercase mb-1">Data Creazione</span>
@@ -1016,56 +964,9 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         <span className="font-medium text-stone-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.REJECTED).length}</span>
                                     </div>
                                 </div>
-
-                                {/* DESCRIPTION SECTION */}
-                                <div>
-                                    <h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2">
-                                        <FileText size={14}/> Descrizione Posizione
-                                    </h4>
-                                    <div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">
-                                        {jobInfoTarget.description || "Nessuna descrizione disponibile."}
-                                    </div>
-                                </div>
-
-                                {/* REQUIREMENTS SECTION */}
-                                <div>
-                                    <h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2">
-                                        <ListChecks size={14}/> Requisiti
-                                    </h4>
-                                    <div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">
-                                        {jobInfoTarget.requirements || "Nessun requisito specificato."}
-                                    </div>
-                                </div>
-
-                                {/* TEAM MEMBERS SECTION */}
-                                <div>
-                                    <h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2">
-                                        <Users size={14}/> Team di Selezione
-                                    </h4>
-                                    <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-                                        {!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (
-                                            <p className="p-4 text-sm text-stone-400 italic">Nessun membro assegnato.</p>
-                                        ) : (
-                                            // In a real app, we would fetch users. Reusing availableUsers if populated, or just showing count/IDs
-                                            jobInfoTarget.assignedTeamMembers.map(uid => {
-                                                // Try to find user in availableUsers (if loaded) or show placeholder
-                                                const u = availableUsers.find(user => user.uid === uid);
-                                                return (
-                                                    <div key={uid} className="flex items-center gap-3 p-3 hover:bg-stone-50 border-b border-stone-50 last:border-0">
-                                                        <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-emerald-600 border border-stone-200">
-                                                            {u ? u.name.charAt(0) : '?'}
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-bold text-stone-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p>
-                                                            <p className="text-xs text-stone-500">{u ? u.role : 'Membro Team'}</p>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })
-                                        )}
-                                    </div>
-                                </div>
-
+                                <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><FileText size={14}/> Descrizione Posizione</h4><div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">{jobInfoTarget.description || "Nessuna descrizione disponibile."}</div></div>
+                                <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><ListChecks size={14}/> Requisiti</h4><div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">{jobInfoTarget.requirements || "Nessun requisito specificato."}</div></div>
+                                <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><Users size={14}/> Team di Selezione</h4><div className="bg-white border border-stone-200 rounded-xl overflow-hidden">{!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (<p className="p-4 text-sm text-stone-400 italic">Nessun membro assegnato.</p>) : (jobInfoTarget.assignedTeamMembers.map(uid => { const u = availableUsers.find(user => user.uid === uid); return (<div key={uid} className="flex items-center gap-3 p-3 hover:bg-stone-50 border-b border-stone-50 last:border-0"><div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-emerald-600 border border-stone-200">{u ? u.name.charAt(0) : '?'}</div><div><p className="text-sm font-bold text-stone-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p><p className="text-xs text-stone-500">{u ? u.role : 'Membro Team'}</p></div></div>)}))}</div></div>
                             </div>
                         </div>
                     </div>
@@ -1079,7 +980,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         <div className="h-full flex flex-col bg-stone-50/50">
             {/* TOOLBAR */}
             <div className="bg-white/80 backdrop-blur-md border-b border-stone-200 px-6 py-3 flex justify-between items-center shadow-sm shrink-0 z-20">
-                {/* ... same toolbar content ... */}
                 <div className="flex items-center gap-4">
                     <button onClick={() => setSelectedJobId(null)} className="flex items-center gap-1 text-stone-500 hover:text-emerald-600 transition-colors text-sm font-bold"><ArrowRight size={16} className="rotate-180" /> Torna alle posizioni</button>
                     <div className="h-6 w-px bg-stone-200"></div>
@@ -1127,11 +1027,11 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     </div>
                 ) : (
                     <div className="h-full p-6 overflow-hidden flex flex-col">
-                        <div className="bg-white/70 backdrop-blur-xl border border-white rounded-2xl shadow-sm overflow-hidden flex flex-col flex-1">
+                        <div className="glass-card bg-white/70 backdrop-blur-xl border border-white rounded-2xl shadow-sm overflow-hidden flex flex-col flex-1">
                             {/* ... Grid View content ... */}
                             <div className="overflow-auto flex-1 custom-scrollbar">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-stone-50/90 sticky top-0 z-10 shadow-sm text-xs text-stone-500 font-semibold uppercase tracking-wider">
+                                <table className="w-full text-left border-collapse relative">
+                                    <thead className="bg-stone-50/90 backdrop-blur-md sticky top-0 z-10 shadow-sm text-xs text-stone-500 font-semibold uppercase tracking-wider">
                                         <tr>
                                             <SortHeader label="Candidato" sortKey="candidate" />
                                             <SortHeader label="Età" sortKey="age" />
@@ -1161,14 +1061,26 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                         <div className="flex">{[1,2,3,4,5].map(star => (<Star key={star} size={14} className={`cursor-pointer transition-colors ${star <= (app.rating || 0) ? 'fill-amber-400 text-amber-400' : 'text-stone-300 hover:text-amber-200'}`} onClick={() => handleInlineRatingChange(app.id, star)}/>))}</div>
                                                     </td>
                                                     <td className="p-4" onClick={e => e.stopPropagation()}>
-                                                        <select value={app.priority || 'LOW'} onChange={(e) => handleInlinePriorityChange(app.id, e.target.value as any)} className={`text-xs font-bold px-2 py-1 rounded border outline-none cursor-pointer ${app.priority === 'HIGH' ? 'bg-red-100 text-red-700 border-red-200' : app.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                                            <option value="LOW">LOW</option><option value="MEDIUM">MEDIUM</option><option value="HIGH">HIGH</option>
-                                                        </select>
+                                                        <div className="relative">
+                                                            <select 
+                                                                value={app.priority || 'LOW'} 
+                                                                onChange={(e) => handleInlinePriorityChange(app.id, e.target.value as any)} 
+                                                                className={`appearance-none bg-transparent hover:bg-white/60 focus:bg-white border border-transparent focus:border-stone-200 rounded px-2 py-1 text-xs font-bold outline-none cursor-pointer w-full transition-all ${app.priority === 'HIGH' ? 'text-red-700' : app.priority === 'MEDIUM' ? 'text-yellow-800' : 'text-blue-700'}`}
+                                                            >
+                                                                <option value="LOW">LOW</option><option value="MEDIUM">MEDIUM</option><option value="HIGH">HIGH</option>
+                                                            </select>
+                                                        </div>
                                                     </td>
                                                     <td className="p-4" onClick={e => e.stopPropagation()}>
-                                                        <select value={app.status} onChange={(e) => handleInlineStatusChange(app.id, e.target.value as any)} className={`text-xs font-bold px-2 py-1 rounded border outline-none cursor-pointer ${StatusColors[app.status]}`}>
-                                                            {Object.values(SelectionStatus).map(s => (<option key={s} value={s}>{StatusLabels[s]}</option>))}
-                                                        </select>
+                                                        <div className="relative">
+                                                            <select 
+                                                                value={app.status} 
+                                                                onChange={(e) => handleInlineStatusChange(app.id, e.target.value as any)} 
+                                                                className={`appearance-none bg-transparent hover:bg-white/60 focus:bg-white border border-transparent focus:border-emerald-200 rounded px-2 py-1 text-xs font-bold outline-none cursor-pointer w-full transition-all ${StatusColors[app.status]}`}
+                                                            >
+                                                                {Object.values(SelectionStatus).map(s => (<option key={s} value={s}>{StatusLabels[s]}</option>))}
+                                                            </select>
+                                                        </div>
                                                     </td>
                                                     <td className="p-4"><div className={`text-xs font-bold px-2 py-1 rounded inline-flex items-center gap-1 border ${(app.aiScore || 0) >= 80 ? 'bg-green-50 text-green-700 border-green-100' : (app.aiScore || 0) >= 50 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : 'bg-red-50 text-red-700 border-red-100'}`}><BrainCircuit size={12}/> {app.aiScore}%</div></td>
                                                     <td className="p-4 font-bold text-indigo-700">{totalScore > 0 ? `${totalScore}/${maxScore}` : '-'}</td>
@@ -1238,7 +1150,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             <button onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }} className="text-stone-400 hover:text-stone-600"><X size={24}/></button>
                         </div>
                         
-                        {/* ADDED EDIT BUTTON IN QUICK VIEW */}
                         {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
                             <div className="px-6 pt-4">
                                 <button 
@@ -1251,8 +1162,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         )}
 
                         <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar space-y-6">
-                            
-                            {/* STATS DASHBOARD SECTION (NEW) */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
                                     <span className="text-xs font-bold text-blue-700 uppercase">Totale Candidati</span>
@@ -1292,8 +1201,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     </div>
                                 </div>
                             </div>
-
-                            {/* INFO SECTION */}
                             <div className="grid grid-cols-2 gap-4 text-sm bg-stone-50 p-4 rounded-xl border border-stone-100">
                                 <div>
                                     <span className="block text-xs font-bold text-stone-400 uppercase mb-1">Data Creazione</span>
@@ -1304,56 +1211,9 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                     <span className="font-medium text-stone-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.REJECTED).length}</span>
                                 </div>
                             </div>
-
-                            {/* DESCRIPTION SECTION */}
-                            <div>
-                                <h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2">
-                                    <FileText size={14}/> Descrizione Posizione
-                                </h4>
-                                <div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">
-                                    {jobInfoTarget.description || "Nessuna descrizione disponibile."}
-                                </div>
-                            </div>
-
-                            {/* REQUIREMENTS SECTION */}
-                            <div>
-                                <h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2">
-                                    <ListChecks size={14}/> Requisiti
-                                </h4>
-                                <div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">
-                                    {jobInfoTarget.requirements || "Nessun requisito specificato."}
-                                </div>
-                            </div>
-
-                            {/* TEAM MEMBERS SECTION */}
-                            <div>
-                                <h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2">
-                                    <Users size={14}/> Team di Selezione
-                                </h4>
-                                <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-                                    {!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (
-                                        <p className="p-4 text-sm text-stone-400 italic">Nessun membro assegnato.</p>
-                                    ) : (
-                                        // In a real app, we would fetch users. Reusing availableUsers if populated, or just showing count/IDs
-                                        jobInfoTarget.assignedTeamMembers.map(uid => {
-                                            // Try to find user in availableUsers (if loaded) or show placeholder
-                                            const u = availableUsers.find(user => user.uid === uid);
-                                            return (
-                                                <div key={uid} className="flex items-center gap-3 p-3 hover:bg-stone-50 border-b border-stone-50 last:border-0">
-                                                    <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-emerald-600 border border-stone-200">
-                                                        {u ? u.name.charAt(0) : '?'}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-stone-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p>
-                                                        <p className="text-xs text-stone-500">{u ? u.role : 'Membro Team'}</p>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })
-                                    )}
-                                </div>
-                            </div>
-
+                            <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><FileText size={14}/> Descrizione Posizione</h4><div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">{jobInfoTarget.description || "Nessuna descrizione disponibile."}</div></div>
+                            <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><ListChecks size={14}/> Requisiti</h4><div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">{jobInfoTarget.requirements || "Nessun requisito specificato."}</div></div>
+                            <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><Users size={14}/> Team di Selezione</h4><div className="bg-white border border-stone-200 rounded-xl overflow-hidden">{!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (<p className="p-4 text-sm text-stone-400 italic">Nessun membro assegnato.</p>) : (jobInfoTarget.assignedTeamMembers.map(uid => { const u = availableUsers.find(user => user.uid === uid); return (<div key={uid} className="flex items-center gap-3 p-3 hover:bg-stone-50 border-b border-stone-50 last:border-0"><div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-emerald-600 border border-stone-200">{u ? u.name.charAt(0) : '?'}</div><div><p className="text-sm font-bold text-stone-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p><p className="text-xs text-stone-500">{u ? u.role : 'Membro Team'}</p></div></div>)}))}</div></div>
                         </div>
                     </div>
                 </div>
@@ -1390,7 +1250,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar">
-                                    {/* INFO TAB */}
                                     {quickViewTab === 'info' && (
                                         <div className="space-y-6">
                                             <button onClick={openEmailModal} className="w-full bg-indigo-50 text-indigo-700 py-3 rounded-xl font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2 mb-4"><Mail size={18}/> Invia Email al Candidato</button>
@@ -1400,7 +1259,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                     <div className="flex justify-between items-center mb-2">
                                                         <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><BrainCircuit size={16}/> AI Match Analysis</h4>
                                                         <div className="flex items-center gap-3">
-                                                            {/* RECALCULATE BUTTON */}
                                                             <button 
                                                                 onClick={handleRecalculateSingleFit}
                                                                 disabled={!!evaluatingId}
@@ -1412,7 +1270,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                             <span className="text-2xl font-bold text-indigo-600">{viewingApp.app.aiScore}%</span>
                                                         </div>
                                                     </div>
-                                                    {/* ADDED whitespace-pre-wrap FOR BETTER FORMATTING */}
                                                     <p className="text-sm text-indigo-800 leading-relaxed whitespace-pre-wrap">{viewingApp.app.aiReasoning}</p>
                                                 </div>
                                             )}
@@ -1424,7 +1281,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
                                             <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3">Dettagli Candidato</h4><div className="grid grid-cols-2 gap-4 text-sm"><div className="p-3 bg-stone-50 rounded-lg border border-stone-100"><span className="text-stone-400 block text-xs mb-1">Telefono</span><input className="bg-transparent font-medium text-stone-900 w-full outline-none" value={viewingApp.candidate.phone} onChange={e => handleCandidateUpdate('phone', e.target.value)}/></div><div className="p-3 bg-stone-50 rounded-lg border border-stone-100"><span className="text-stone-400 block text-xs mb-1">Età</span><span className="font-medium text-stone-900">{viewingApp.candidate.age ? viewingApp.candidate.age + ' anni' : '-'}</span></div></div></div>
                                             
-                                            {/* Current Occupation Editable */}
                                             <div>
                                                 <h4 className="text-xs font-bold text-stone-400 uppercase mb-3">Attuale Occupazione</h4>
                                                 <div className="bg-stone-50 rounded-xl p-4 border border-stone-100 text-sm space-y-4">
@@ -1449,7 +1305,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         </div>
                                     )}
 
-                                    {/* SCORECARD TAB */}
                                     {quickViewTab === 'scorecard' && (
                                         <div className="space-y-6">
                                             {!selectedJob?.scorecardSchema ? (
@@ -1490,7 +1345,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         </div>
                                     )}
 
-                                    {/* PROCESSES TAB */}
                                     {quickViewTab === 'processes' && (
                                         <div className="space-y-4">
                                             <h4 className="text-xs font-bold text-stone-400 uppercase mb-3">Altre Candidature</h4>
@@ -1510,7 +1364,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         </div>
                                     )}
 
-                                    {/* COMMENTS TAB */}
                                     {quickViewTab === 'comments' && (
                                         <div className="flex flex-col h-full">
                                             <div className="flex-1 space-y-4 mb-6">
@@ -1523,7 +1376,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         </div>
                                     )}
 
-                                     {/* ATTACHMENTS TAB (ADDED) */}
                                     {quickViewTab === 'attachments' && (
                                         <div className="space-y-4">
                                             <div className="flex justify-between items-center mb-2">
@@ -1573,7 +1425,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 </div>
             )}
             {/* ... other modals (Email, Rejection, Associate, Matrix, PhotoZoom) ... */}
-            {/* EMAIL MODAL */}
             {isEmailModalOpen && (
                 <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[70] backdrop-blur-sm">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-in zoom-in-95">
@@ -1596,7 +1447,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 </div>
             )}
 
-            {/* REJECTION REASON MODAL */}
             {pendingRejection && (
                 <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[60] backdrop-blur-sm">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-red-100 animate-in zoom-in-95">
@@ -1614,7 +1464,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 </div>
             )}
 
-            {/* ASSOCIATE MODAL */}
             {isAssociateModalOpen && (
                 <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-50 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-2xl m-4 shadow-2xl max-h-[80vh] flex flex-col animate-in zoom-in-95">
@@ -1634,15 +1483,12 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 </div>
             )}
 
-            {/* COMPARISON MATRIX MODAL */}
             {isComparisonModalOpen && selectedJob?.scorecardSchema && (
                 <div className="fixed inset-0 bg-white z-[80] flex flex-col animate-in slide-in-from-bottom-4">
                     <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-stone-50/80 backdrop-blur-md shadow-sm">
                         <div><h2 className="text-xl font-bold text-stone-900 flex items-center gap-2 font-serif"><BarChart2 className="text-emerald-600"/> Matrice di Confronto</h2><p className="text-sm text-stone-500">Analisi comparativa dei candidati per <span className="font-semibold">{selectedJob.title}</span></p></div>
                         
-                        {/* FILTERS */}
                         <div className="flex items-center gap-4">
-                            {/* Multi-select Candidate Filter */}
                             <div className="relative">
                                 <button onClick={() => setIsMatrixCandidateFilterOpen(!isMatrixCandidateFilterOpen)} className="bg-white border border-stone-300 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-stone-50 text-stone-700 shadow-sm transition-colors">
                                     <Filter size={16}/> {matrixSelectedCandidateIds.size > 0 ? `${matrixSelectedCandidateIds.size} Candidati` : 'Tutti i Candidati'} <ChevronDown size={14}/>
@@ -1665,7 +1511,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 )}
                             </div>
                             
-                            {/* Status Filter */}
                             <div className="flex bg-stone-200/50 rounded-lg p-1 gap-1">
                                 {Object.values(SelectionStatus).slice(0,4).map(s => (
                                     <button 
@@ -1689,7 +1534,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 <div className="text-center py-20 text-stone-400"><BarChart2 size={48} className="mx-auto mb-4 opacity-30"/><p className="text-lg">Nessun candidato con valutazione trovato.</p></div>
                             ) : (
                                 <>
-                                    {/* RADAR CHART SECTION */}
                                     <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-200">
                                         <h3 className="text-lg font-bold text-stone-900 mb-6 text-center font-serif">Confronto Competenze</h3>
                                         <RadarChart 
@@ -1709,7 +1553,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                         </div>
                                     </div>
 
-                                    {/* HEATMAP TABLE */}
                                     <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
                                         <table className="w-full text-left text-sm table-fixed">
                                             <thead>
@@ -1727,7 +1570,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-stone-100">
-                                                {/* TOTAL SCORE ROW */}
                                                 <tr className="bg-indigo-50/50 font-bold">
                                                     <td className="p-4 text-indigo-900">PUNTEGGIO TOTALE</td>
                                                     {matrixCandidates.map(app => {
@@ -1743,7 +1585,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                                 <td className="p-3 pl-6 text-stone-700 border-r border-stone-100 truncate" title={item.label}>{item.label}</td>
                                                                 {matrixCandidates.map(app => {
                                                                     const score = app.scorecardResults?.[item.id] || 0;
-                                                                    // Color scale for heatmap cells
                                                                     const bgClass = score === 5 ? 'bg-green-100 text-green-800' : score === 4 ? 'bg-green-50 text-green-700' : score === 3 ? 'bg-yellow-50 text-yellow-700' : score === 2 ? 'bg-orange-50 text-orange-700' : score === 1 ? 'bg-red-50 text-red-700' : 'text-stone-300';
                                                                     return (
                                                                         <td key={app.id} className="p-3 text-center border-l border-stone-100">
@@ -1765,7 +1606,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                 </div>
             )}
 
-            {/* PHOTO ZOOM */}
             {isPhotoZoomed && viewingApp?.candidate.photo && (
                 <div className="fixed inset-0 bg-stone-900/90 z-[100] flex items-center justify-center cursor-zoom-out animate-in fade-in duration-200" onClick={() => setIsPhotoZoomed(false)}>
                     <img src={`data:image/jpeg;base64,${viewingApp.candidate.photo}`} className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Full size"/>
