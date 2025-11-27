@@ -196,7 +196,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
         const commonData = { ...jobForm, assignedTeamMembers: assignedTeamMembers };
         
         try {
-            let targetJobId = editingJobId;
+            let targetJobId: string | null = editingJobId;
 
             if (editingJobId) {
                 const oldJob = data.jobs.find(j => j.id === editingJobId);
@@ -229,7 +229,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             let aiScore, aiReasoning;
                             if (candidate) {
                                 try {
-                                    const job = editingJobId ? data.jobs.find(j => j.id === editingJobId) : { ...commonData, id: targetJobId } as JobPosition;
+                                    const job = editingJobId ? data.jobs.find(j => j.id === editingJobId) : { ...commonData, id: targetJobId! } as JobPosition;
                                     const fit = await evaluateFit(candidate, job!, data.companyInfo);
                                     aiScore = fit.score;
                                     aiReasoning = fit.reasoning;
@@ -238,7 +238,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             const app: Application = {
                                 id: generateId(),
                                 candidateId,
-                                jobId: targetJobId as string,
+                                jobId: targetJobId!,
                                 status: SelectionStatus.TO_ANALYZE,
                                 aiScore,
                                 aiReasoning,
@@ -795,12 +795,13 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                 </div>
                                 
                                 <div className="relative">
+                                    <label className="text-emerald-400 font-bold uppercase tracking-widest text-xs mb-2 block">Di cosa hai bisogno?</label>
                                     <textarea 
                                         value={magicPrompt} 
                                         onChange={e => setMagicPrompt(e.target.value)} 
                                         placeholder="Descrivi il ruolo (es. Senior React Developer per team Engineering...)"
-                                        className="w-full bg-transparent text-white text-3xl md:text-5xl font-serif font-bold placeholder:text-white/20 outline-none border-none resize-none overflow-hidden h-auto min-h-[80px]"
-                                        rows={2}
+                                        className="w-full bg-transparent text-white text-2xl md:text-4xl font-serif font-bold placeholder:text-white/40 outline-none border-b border-white/10 focus:border-emerald-500 transition-colors resize-none overflow-hidden h-auto min-h-[60px] pb-2"
+                                        rows={1}
                                         style={{ height: 'auto' }}
                                         onInput={(e: any) => {
                                             e.target.style.height = "auto";
@@ -835,51 +836,47 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             <div className="max-w-4xl mx-auto p-8 pb-32">
                                 {/* STEP 1: JOB DETAILS */}
                                 {creationStep === 1 && (
-                                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            <div className="space-y-6">
-                                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
-                                                    <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><FileText size={20} className="text-emerald-600"/> Informazioni Base</h3>
-                                                    <div className="space-y-4">
-                                                        <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Titolo</label><input value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" placeholder="Es. Marketing Manager" /></div>
-                                                        <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Dipartimento</label><input value={jobForm.department} onChange={e => setJobForm({...jobForm, department: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" placeholder="Es. Marketing" /></div>
-                                                        {editingJobId && (<div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Stato</label><select value={jobForm.status} onChange={e => setJobForm({...jobForm, status: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none"><option value="OPEN">APERTA</option><option value="CLOSED">CHIUSA</option></select></div>)}
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
-                                                    <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><Users size={20} className="text-emerald-600"/> Team di Selezione</h3>
-                                                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                                        {availableUsers.map(u => {
-                                                            const isSelected = assignedTeamMembers.includes(u.uid!);
-                                                            return (
-                                                                <div 
-                                                                    key={u.uid} 
-                                                                    onClick={() => setAssignedTeamMembers(prev => prev.includes(u.uid!) ? prev.filter(id => id !== u.uid) : [...prev, u.uid!])} 
-                                                                    className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${isSelected ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'bg-stone-50 border-stone-100 hover:border-emerald-300'}`}
-                                                                >
-                                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-stone-300'}`}>
-                                                                        {isSelected && <Check size={12} className="text-white"/>}
-                                                                    </div>
-                                                                    <div className="flex-1">
-                                                                        <p className={`text-sm font-bold ${isSelected ? 'text-emerald-900' : 'text-stone-900'}`}>{u.name}</p>
-                                                                        <p className="text-xs text-stone-500">{u.role}</p>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                                                <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><FileText size={20} className="text-emerald-600"/> Informazioni Base</h3>
+                                                <div className="space-y-4">
+                                                    <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Titolo</label><input value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" placeholder="Es. Marketing Manager" /></div>
+                                                    <div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Dipartimento</label><input value={jobForm.department} onChange={e => setJobForm({...jobForm, department: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" placeholder="Es. Marketing" /></div>
+                                                    {editingJobId && (<div><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Stato</label><select value={jobForm.status} onChange={e => setJobForm({...jobForm, status: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none"><option value="OPEN">APERTA</option><option value="CLOSED">CHIUSA</option></select></div>)}
                                                 </div>
                                             </div>
                                             
-                                            <div className="space-y-6">
-                                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 h-full flex flex-col">
-                                                    <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><ListChecks size={20} className="text-emerald-600"/> Dettagli Ruolo</h3>
-                                                    <div className="space-y-4 flex-1">
-                                                        <div className="flex-1 flex flex-col"><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Descrizione</label><textarea value={jobForm.description} onChange={e => setJobForm({...jobForm, description: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none flex-1 min-h-[150px]" placeholder="Descrizione del ruolo..." /></div>
-                                                        <div className="flex-1 flex flex-col"><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Requisiti</label><textarea value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none flex-1 min-h-[150px]" placeholder="Requisiti richiesti..." /></div>
-                                                    </div>
+                                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                                                <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><Users size={20} className="text-emerald-600"/> Team di Selezione</h3>
+                                                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar p-1">
+                                                    {availableUsers.map(u => {
+                                                        const isSelected = assignedTeamMembers.includes(u.uid!);
+                                                        return (
+                                                            <div 
+                                                                key={u.uid} 
+                                                                onClick={() => setAssignedTeamMembers(prev => prev.includes(u.uid!) ? prev.filter(id => id !== u.uid) : [...prev, u.uid!])} 
+                                                                className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${isSelected ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'bg-stone-50 border-stone-100 hover:border-emerald-300'}`}
+                                                            >
+                                                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-stone-300'}`}>
+                                                                    {isSelected && <Check size={12} className="text-white"/>}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <p className={`text-sm font-bold ${isSelected ? 'text-emerald-900' : 'text-stone-900'}`}>{u.name}</p>
+                                                                    <p className="text-xs text-stone-500">{u.role}</p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                                            <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><ListChecks size={20} className="text-emerald-600"/> Dettagli Ruolo</h3>
+                                            <div className="space-y-6">
+                                                <div className="flex-1 flex flex-col"><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Descrizione</label><textarea value={jobForm.description} onChange={e => setJobForm({...jobForm, description: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none flex-1 min-h-[150px]" placeholder="Descrizione del ruolo..." /></div>
+                                                <div className="flex-1 flex flex-col"><label className="block text-xs font-bold text-stone-500 uppercase mb-1">Requisiti</label><textarea value={jobForm.requirements} onChange={e => setJobForm({...jobForm, requirements: e.target.value})} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none flex-1 min-h-[150px]" placeholder="Requisiti richiesti..." /></div>
                                             </div>
                                         </div>
                                     </div>
@@ -1489,7 +1486,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><Users size={14}/> Team di Selezione</h4><div className="bg-white border border-stone-200 rounded-xl overflow-hidden">{!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (<p className="p-4 text-sm text-stone-400 italic">Nessun membro assegnato.</p>) : (jobInfoTarget.assignedTeamMembers.map(uid => { const u = availableUsers.find(user => user.uid === uid); return (<div key={uid} className="flex items-center gap-3 p-3 hover:bg-stone-50 border-b border-stone-50 last:border-0"><div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-emerald-600 border border-stone-200">{u ? u.name.charAt(0) : '?'}</div><div><p className="text-sm font-bold text-stone-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p><p className="text-xs text-stone-500">{u ? u.role : 'Membro Team'}</p></div></div>)}))}</div></div>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
             {/* QUICK VIEW OVERLAY */}
             {viewingApp && (

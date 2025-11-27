@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, ArrowRight, AlertCircle, UserPlus, LogIn, Hexagon, Sparkles } from 'lucide-react';
+import { LayoutDashboard, ArrowRight, AlertCircle, UserPlus, LogIn, Sparkles } from 'lucide-react';
 import { User } from '../types';
 import { auth } from '../services/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
@@ -8,6 +8,36 @@ interface LoginViewProps {
     onLogin: (user: User) => void;
     isCloudConfigured: boolean;
 }
+
+// Talentium Custom Logo (Large)
+const TalentiumLogoLarge = ({ className = "w-16 h-16" }: { className?: string }) => (
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+        <defs>
+            <linearGradient id="talentiumGradientLg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#34d399" /> {/* Emerald-400 */}
+                <stop offset="1" stopColor="#0f766e" /> {/* Teal-700 */}
+            </linearGradient>
+            <filter id="glowLg" x="-10" y="-10" width="60" height="60" filterUnits="userSpaceOnUse">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+        </defs>
+        {/* Outer Glow */}
+        <path d="M20 2L36 11V29L20 38L4 29V11L20 2Z" fill="url(#talentiumGradientLg)" fillOpacity="0.1" filter="url(#glowLg)" />
+        
+        {/* Main Structure */}
+        <path d="M20 4L34 12V28L20 36L6 28V12L20 4Z" fill="white" fillOpacity="0.1" stroke="url(#talentiumGradientLg)" strokeWidth="0.5" />
+        <path d="M20 8L30 14V26L20 32L10 26V14L20 8Z" stroke="url(#talentiumGradientLg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        
+        {/* Internal Details */}
+        <path d="M20 8V32" stroke="white" strokeWidth="1.5" strokeOpacity="0.8" strokeLinecap="round"/>
+        <path d="M10 14L30 14" stroke="white" strokeWidth="1.5" strokeOpacity="0.8" strokeLinecap="round"/>
+        <path d="M10 26L30 26" stroke="white" strokeWidth="1.5" strokeOpacity="0.8" strokeLinecap="round"/>
+        
+        {/* Core Gem */}
+        <circle cx="20" cy="20" r="4" fill="white" className="animate-pulse" />
+    </svg>
+);
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLogin, isCloudConfigured }) => {
     const [isRegistering, setIsRegistering] = useState(false);
@@ -73,11 +103,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, isCloudConfigured
                 <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/90 via-stone-900/40 to-stone-900/20"></div>
                 
                 <div className="relative z-10 flex flex-col justify-between p-16 h-full text-white">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-900/50 text-white">
-                            <Hexagon size={24} fill="currentColor" />
+                    <div className="flex items-center gap-4">
+                        <div className="bg-white/10 backdrop-blur-md p-2 rounded-2xl border border-white/20 shadow-xl">
+                            <TalentiumLogoLarge className="w-10 h-10" />
                         </div>
-                        <span className="text-2xl font-serif font-bold tracking-tight">TalentFlow AI</span>
+                        <span className="text-3xl font-serif font-bold tracking-tight text-white">Talentium</span>
                     </div>
 
                     <div className="space-y-6 max-w-lg">
@@ -104,7 +134,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, isCloudConfigured
                     </div>
                     
                     <div className="text-xs text-stone-400 flex justify-between items-end">
-                        <span>© 2024 TalentFlow Inc.</span>
+                        <span>© 2024 Talentium Inc.</span>
                         <div className="flex items-center gap-1">
                             <Sparkles size={12} className="text-emerald-400"/> Powered by Gemini 2.5
                         </div>
@@ -120,14 +150,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, isCloudConfigured
                 <div className="w-full max-w-md relative z-10">
                     <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white">
                         <div className="mb-8 text-center">
-                            <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-lg shadow-emerald-200 rotate-3 transform hover:rotate-6 transition-transform">
-                                <LayoutDashboard size={32} />
+                            <div className="w-20 h-20 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner border border-white rotate-3 transform hover:rotate-6 transition-transform">
+                                <TalentiumLogoLarge className="w-12 h-12" />
                             </div>
                             <h2 className="text-3xl font-serif font-bold text-stone-800 mb-2">
                                 {isRegistering ? "Crea Account" : "Bentornato"}
                             </h2>
                             <p className="text-stone-500 text-sm">
-                                {isRegistering ? "Inizia a gestire i tuoi talenti oggi stesso." : "Accedi alla tua dashboard HR."}
+                                {isRegistering ? "Inizia a gestire i tuoi talenti oggi stesso." : "Accedi alla tua dashboard Talentium."}
                             </p>
                         </div>
 

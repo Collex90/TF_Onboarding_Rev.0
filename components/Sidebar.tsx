@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Briefcase, Settings, ChevronLeft, ChevronRight, LogOut, Flag, Hexagon } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Settings, ChevronLeft, ChevronRight, LogOut, Flag } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface SidebarProps {
@@ -10,6 +10,26 @@ interface SidebarProps {
     user: User | null;
     onLogout: () => void;
 }
+
+// Talentium Custom Logo Component
+const TalentiumLogo = ({ className = "w-8 h-8" }: { className?: string }) => (
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+        <defs>
+            <linearGradient id="talentiumGradient" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#34d399" /> {/* Emerald-400 */}
+                <stop offset="1" stopColor="#0f766e" /> {/* Teal-700 */}
+            </linearGradient>
+            <filter id="glow" x="-4" y="-4" width="48" height="48" filterUnits="userSpaceOnUse">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+        </defs>
+        <path d="M20 4L34 12V28L20 36L6 28V12L20 4Z" fill="url(#talentiumGradient)" fillOpacity="0.2" />
+        <path d="M20 8L30 14V26L20 32L10 26V14L20 8Z" stroke="url(#talentiumGradient)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M20 8V32M10 14L30 14M10 26L30 26" stroke="white" strokeWidth="1.5" strokeOpacity="0.6" strokeLinecap="round"/>
+        <circle cx="20" cy="20" r="3" fill="white" />
+    </svg>
+);
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isCollapsed, toggleCollapse, user, onLogout }) => {
     const allMenuItems = [
@@ -30,15 +50,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isColl
             <div className={`p-6 flex ${isCollapsed ? 'justify-center' : 'justify-between'} items-center`}>
                 {!isCollapsed && (
                     <div className="flex items-center gap-3 text-emerald-800 overflow-hidden whitespace-nowrap animate-in fade-in">
-                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-                            <Hexagon size={20} fill="currentColor" className="text-white" />
+                        <div className="bg-white/50 p-1.5 rounded-xl shadow-sm">
+                            <TalentiumLogo className="w-8 h-8" />
                         </div>
-                        <h1 className="text-xl font-serif font-bold tracking-tight">TalentFlow</h1>
+                        <h1 className="text-2xl font-serif font-bold tracking-tight text-emerald-950">Talentium</h1>
                     </div>
                 )}
                 {isCollapsed && (
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center text-white shadow-lg">
-                        <Hexagon size={24} fill="currentColor" />
+                    <div className="bg-white/50 p-2 rounded-xl shadow-sm">
+                        <TalentiumLogo className="w-8 h-8" />
                     </div>
                 )}
                 
