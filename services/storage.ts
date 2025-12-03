@@ -1,4 +1,5 @@
-import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus, BackupMetadata, DeletedItem, OnboardingPhase } from '../types';
+
+import { AppState, Candidate, JobPosition, Application, SelectionStatus, Comment, CandidateStatus, User, UserRole, EmailTemplate, ScorecardTemplate, ScorecardSchema, OnboardingProcess, OnboardingTask, OnboardingTemplate, CompanyInfo, Attachment, OnboardingStatus, BackupMetadata, DeletedItem, OnboardingPhase, Employee, EmployeeStatus } from '../types';
 import { db, auth, storage } from './firebase';
 import { 
   collection, 
@@ -31,6 +32,7 @@ const defaultState: AppState = {
   jobs: [],
   applications: [],
   onboarding: [],
+  employees: [],
   companyInfo: { name: '', industry: '', description: '', productsServices: '' }
 };
 
@@ -269,6 +271,7 @@ export const subscribeToData = (user: User | null, callback: (data: AppState) =>
     const qJobs = query(collection(db, 'jobs'));
     const qApps = query(collection(db, 'applications'));
     const qOnboarding = query(collection(db, 'onboarding'));
+    const qEmployees = query(collection(db, 'employees'));
     const docCompany = doc(db, 'settings', 'company');
 
     const handleError = (err: any) => {
@@ -290,6 +293,7 @@ export const subscribeToData = (user: User | null, callback: (data: AppState) =>
     const unsubJobs = onSnapshot(qJobs, safeCallback, handleError);
     const unsubApps = onSnapshot(qApps, safeCallback, handleError);
     const unsubOnboarding = onSnapshot(qOnboarding, safeCallback, handleError);
+    const unsubEmployees = onSnapshot(qEmployees, safeCallback, handleError);
     const unsubCompany = onSnapshot(docCompany, safeCallback, handleError);
 
     return () => {
@@ -297,6 +301,7 @@ export const subscribeToData = (user: User | null, callback: (data: AppState) =>
         unsubJobs();
         unsubApps();
         unsubOnboarding();
+        unsubEmployees();
         unsubCompany();
     };
   }
@@ -307,7 +312,8 @@ export const subscribeToData = (user: User | null, callback: (data: AppState) =>
           ...d,
           candidates: (d.candidates || []).filter(c => !c.isDeleted),
           jobs: (d.jobs || []).filter(j => !j.isDeleted),
-          applications: (d.applications || []).filter(a => !a.isDeleted)
+          applications: (d.applications || []).filter(a => !a.isDeleted),
+          employees: (d.employees || []).filter(e => !e.isDeleted),
       };
   };
 
@@ -323,11 +329,12 @@ const refreshFullStateFromFirebase = async (user: User | null, callback: (data: 
     try {
         const qJobs = query(collection(db, 'jobs'));
 
-        const [cSnap, jSnap, aSnap, oSnap, companySnap] = await Promise.all([
+        const [cSnap, jSnap, aSnap, oSnap, eSnap, companySnap] = await Promise.all([
             getDocs(collection(db, 'candidates')),
             getDocs(qJobs),
             getDocs(collection(db, 'applications')),
             getDocs(collection(db, 'onboarding')),
+            getDocs(collection(db, 'employees')),
             getDoc(doc(db, 'settings', 'company'))
         ]);
 
@@ -336,6 +343,7 @@ const refreshFullStateFromFirebase = async (user: User | null, callback: (data: 
             jobs: jSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as JobPosition)).filter(j => !j.isDeleted),
             applications: aSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Application)).filter(a => !a.isDeleted),
             onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess)),
+            employees: eSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Employee)).filter(e => !e.isDeleted),
             companyInfo: companySnap.exists() ? companySnap.data() as CompanyInfo : undefined
         };
         callback(cachedState);
@@ -348,11 +356,12 @@ const refreshFullStateFromFirebase = async (user: User | null, callback: (data: 
 // --- BACKUP & RESTORE ---
 export const getFullDatabase = async (): Promise<AppState> => {
     if (db) {
-        const [cSnap, jSnap, aSnap, oSnap, compSnap] = await Promise.all([
+        const [cSnap, jSnap, aSnap, oSnap, eSnap, compSnap] = await Promise.all([
             getDocs(collection(db, 'candidates')),
             getDocs(collection(db, 'jobs')),
             getDocs(collection(db, 'applications')),
             getDocs(collection(db, 'onboarding')),
+            getDocs(collection(db, 'employees')),
             getDoc(doc(db, 'settings', 'company'))
         ]);
         return {
@@ -360,6 +369,7 @@ export const getFullDatabase = async (): Promise<AppState> => {
             jobs: jSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as JobPosition)),
             applications: aSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Application)),
             onboarding: oSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as OnboardingProcess)),
+            employees: eSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Employee)),
             companyInfo: compSnap.exists() ? compSnap.data() as CompanyInfo : undefined
         };
     } else {
@@ -376,7 +386,8 @@ export const restoreDatabase = async (backupData: AppState) => {
             ...backupData.candidates.map(c => ({ type: 'candidates', data: c })),
             ...backupData.jobs.map(j => ({ type: 'jobs', data: j })),
             ...backupData.applications.map(a => ({ type: 'applications', data: a })),
-            ...(backupData.onboarding || []).map(o => ({ type: 'onboarding', data: o }))
+            ...(backupData.onboarding || []).map(o => ({ type: 'onboarding', data: o })),
+            ...(backupData.employees || []).map(e => ({ type: 'employees', data: e }))
         ];
         const chunkSize = 450;
         for (let i = 0; i < allItems.length; i += chunkSize) {
@@ -514,20 +525,18 @@ export const getDeletedItems = async (): Promise<DeletedItem[]> => {
         results.push({ id: d.id, type: 'job', name: data.title || 'Unknown Position' });
     });
 
-    // Applications
-    const aQ = query(collection(db, 'applications'), where('isDeleted', '==', true));
-    const aSnap = await getDocs(aQ);
-    // Fetch job titles for context would be nice, but keep simple for now
-    aSnap.forEach(d => {
-         // App doesn't have a name, so we use ID or fetch related candidate.
-         // For Recycle Bin V1, let's stick to restoring Candidates/Jobs.
-         // Standalone deleted apps are rare in this logic (cascading delete).
+    // Employees
+    const eQ = query(collection(db, 'employees'), where('isDeleted', '==', true));
+    const eSnap = await getDocs(eQ);
+    eSnap.forEach(d => {
+        const data = d.data();
+        results.push({ id: d.id, type: 'employee', name: `${data.firstName} ${data.lastName}` });
     });
 
     return results;
 };
 
-export const restoreDeletedItem = async (id: string, type: 'candidate' | 'application' | 'job') => {
+export const restoreDeletedItem = async (id: string, type: 'candidate' | 'application' | 'job' | 'employee') => {
     if (!db) return;
     
     const batch = writeBatch(db);
@@ -535,8 +544,7 @@ export const restoreDeletedItem = async (id: string, type: 'candidate' | 'applic
     if (type === 'candidate') {
         const ref = doc(db, 'candidates', id);
         batch.update(ref, { isDeleted: false });
-        
-        // Also restore applications for this candidate? 
+        // Also restore applications
         const appsQ = query(collection(db, 'applications'), where('candidateId', '==', id), where('isDeleted', '==', true));
         const appsSnap = await getDocs(appsQ);
         appsSnap.forEach(doc => {
@@ -545,8 +553,8 @@ export const restoreDeletedItem = async (id: string, type: 'candidate' | 'applic
     } else if (type === 'job') {
          const ref = doc(db, 'jobs', id);
          batch.update(ref, { isDeleted: false });
-    } else {
-         const ref = doc(db, 'applications', id);
+    } else if (type === 'employee') {
+         const ref = doc(db, 'employees', id);
          batch.update(ref, { isDeleted: false });
     }
     
@@ -718,6 +726,49 @@ export const deleteCandidateAttachment = async (candidateId: string, attachmentI
     }
 };
 
+// --- EMPLOYEE ACTIONS ---
+
+export const addEmployee = async (employee: Employee) => {
+    if (db) {
+        await setDoc(doc(db, 'employees', employee.id), sanitizeForFirestore(employee));
+    } else {
+        const data = getLocalData();
+        if (!data.employees) data.employees = [];
+        data.employees.push(employee);
+        saveLocalData(data);
+        window.dispatchEvent(new Event('talentflow-local-update'));
+    }
+};
+
+export const updateEmployee = async (employee: Employee) => {
+    if (db) {
+        await updateDoc(doc(db, 'employees', employee.id), sanitizeForFirestore(employee));
+    } else {
+        const data = getLocalData();
+        const index = data.employees.findIndex(e => e.id === employee.id);
+        if (index !== -1) {
+            data.employees[index] = employee;
+            saveLocalData(data);
+            window.dispatchEvent(new Event('talentflow-local-update'));
+        }
+    }
+};
+
+export const deleteEmployee = async (employeeId: string) => {
+    if (db) {
+        await updateDoc(doc(db, 'employees', employeeId), { isDeleted: true });
+    } else {
+        const data = getLocalData();
+        const emp = data.employees.find(e => e.id === employeeId);
+        if (emp) {
+            emp.isDeleted = true;
+            saveLocalData(data);
+            window.dispatchEvent(new Event('talentflow-local-update'));
+        }
+    }
+};
+
+// ... job, app, onboarding actions are same ... 
 export const addJob = async (job: JobPosition) => {
   if (db) {
     await setDoc(doc(db, 'jobs', job.id), sanitizeForFirestore(job));
@@ -1150,6 +1201,35 @@ export const seedDatabase = async (assignToUserId?: string) => {
 
     const onboarding = [o1, o2];
 
+    // EMPLOYEES DEMO
+    const e1: Employee = {
+        id: 'e1',
+        firstName: 'Marco',
+        lastName: 'Neri',
+        email: 'marco.neri@demo.com',
+        role: 'Tech Lead',
+        department: 'Engineering',
+        startDate: Date.now() - 31536000000, // 1 year ago
+        status: EmployeeStatus.ACTIVE,
+        contractType: 'FULL_TIME',
+        createdAt: Date.now()
+    };
+
+    const e2: Employee = {
+        id: 'e2',
+        firstName: 'Elena',
+        lastName: 'Gialli',
+        email: 'elena.gialli@demo.com',
+        role: 'Marketing Specialist',
+        department: 'Marketing',
+        startDate: Date.now() - 15768000000, // 6 months ago
+        status: EmployeeStatus.ACTIVE,
+        contractType: 'PART_TIME',
+        createdAt: Date.now()
+    };
+
+    const employees = [e1, e2];
+
     const companyInfo: CompanyInfo = {
         name: 'Demo Corp',
         industry: 'Software',
@@ -1170,6 +1250,7 @@ export const seedDatabase = async (assignToUserId?: string) => {
             jobs.forEach(j => batch.set(doc(db, 'jobs', j.id), sanitizeForFirestore(j)));
             applications.forEach(a => batch.set(doc(db, 'applications', a.id), sanitizeForFirestore(a)));
             onboarding.forEach(o => batch.set(doc(db, 'onboarding', o.id), sanitizeForFirestore(o)));
+            employees.forEach(e => batch.set(doc(db, 'employees', e.id), sanitizeForFirestore(e)));
             
             await batch.commit();
             console.log("Cloud Seed Completed");
@@ -1184,7 +1265,8 @@ export const seedDatabase = async (assignToUserId?: string) => {
             jobs,
             applications,
             onboarding,
-            companyInfo
+            companyInfo,
+            employees
         };
         saveLocalData(demoState);
         window.dispatchEvent(new Event('talentflow-local-update'));

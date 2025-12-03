@@ -3,11 +3,14 @@ import { Sidebar } from './components/Sidebar';
 import { CandidateView } from './components/CandidateView';
 import { RecruitmentView } from './components/RecruitmentView';
 import { SettingsView } from './components/SettingsView';
-import { DashboardView } from './components/DashboardView';
+import { DashboardView } from './components/DashboardView'; // Recruitment Dashboard
+import { GlobalDashboard } from './components/GlobalDashboard'; // Launcher
+import { FluxoView } from './components/FluxoView'; // Fluxo Module
+import { HumanView } from './components/HumanView'; // Human Module
 import { LoginView } from './components/LoginView';
 import { OnboardingView } from './components/OnboardingView';
 import { subscribeToData, generateId, addCandidate, createApplication, syncUserProfile, seedDatabase, checkAndTriggerAutoBackup } from './services/storage';
-import { AppState, User, UploadQueueItem, Candidate, SelectionStatus, CandidateStatus, UserRole } from './types';
+import { AppState, User, UploadQueueItem, Candidate, SelectionStatus, CandidateStatus, UserRole, AppModule } from './types';
 import { auth, db, initFirebase } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { parseCV, evaluateFit } from './services/ai';
@@ -124,9 +127,13 @@ const resizeImage = async (file: File): Promise<string> => {
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
+  
+  // NAVIGATION STATE
+  const [activeModule, setActiveModule] = useState<AppModule>('launcher');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [data, setData] = useState<AppState>({ candidates: [], jobs: [], applications: [], onboarding: [] });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  const [data, setData] = useState<AppState>({ candidates: [], jobs: [], applications: [], onboarding: [], employees: [] });
   
   // Data Loading States
   const [loadingData, setLoadingData] = useState(true);
@@ -171,6 +178,16 @@ function App() {
                     checkAndTriggerAutoBackup(); // Run in background
                 }
 
+                // Initial Routing Logic
+                // If user is TEAM, default to recruitment/recruitment
+                if(syncedUser.role === UserRole.TEAM) {
+                    setActiveModule('recruitment');
+                    setActiveTab('recruitment');
+                } else {
+                    // Default to Launcher for Admin/HR
+                    setActiveModule('launcher');
+                }
+
             } else {
                 setUser(null);
             }
@@ -179,28 +196,16 @@ function App() {
     } else {
         const storedUser = localStorage.getItem('talentflow_user_session');
         if (storedUser) {
-            try { setUser(JSON.parse(storedUser)); } catch(e) { console.error("Invalid session"); }
+            try { 
+                const u = JSON.parse(storedUser);
+                setUser(u); 
+                setActiveModule('launcher');
+            } catch(e) { console.error("Invalid session"); }
         }
     }
   }, [authInstance]);
 
-  // --- RBAC REDIRECT LOGIC ---
-  useEffect(() => {
-      if (user) {
-          // If user is TEAM, they cannot access dashboard or settings or candidates
-          // They are forced to 'recruitment'
-          if (user.role === UserRole.TEAM && activeTab !== 'recruitment') {
-              setActiveTab('recruitment');
-          }
-          // If user is HR, they cannot access settings
-          if (user.role === UserRole.HR && activeTab === 'settings') {
-              setActiveTab('dashboard');
-          }
-      }
-  }, [user, activeTab]);
-
-
-  // Handle Data Subscription (Realtime) - FIXED RACE CONDITION
+  // Handle Data Subscription (Realtime)
   useEffect(() => {
     if (db && !user) {
         setLoadingData(true);
@@ -208,7 +213,6 @@ function App() {
     }
 
     setConnectionError(null);
-    // PASS USER CONTEXT to apply security filters
     const unsubscribe = subscribeToData(
         user,
         (newData) => {
@@ -228,19 +232,89 @@ function App() {
     return () => unsubscribe();
   }, [user, refreshTrigger, firebaseInitialized]); 
 
-  const handleConfigChange = () => {
-      const { auth: a } = initFirebase();
-      setAuthInstance(a);
-      setFirebaseInitialized(Date.now());
+  // --- MODULE SWITCHING LOGIC ---
+  const handleModuleChange = (newModule: AppModule) => {
+      setActiveModule(newModule);
+      // Reset Tab based on module
+      if(newModule === 'recruitment') setActiveTab('dashboard');
+      else if(newModule === 'fluxo') setActiveTab('dashboard');
+      else if(newModule === 'human') setActiveTab('dashboard');
+      // For launcher, tab doesn't matter much as it renders GlobalDashboard
   };
 
-  // ... (Upload logic - handleUploadFiles, processQueue, saveCandidateAndApp, handleForceSave - KEPT SAME)
+  const renderContent = () => {
+    if (loadingData) return <div className="flex items-center justify-center h-full text-gray-400"><Loader2 className="animate-spin mr-2"/> Caricamento dati...</div>;
+    
+    if (connectionError) return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+            <AlertTriangle className="text-red-500 mb-4" size={48} />
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Errore Connessione</h2>
+            <p className="text-gray-500 mb-6">{connectionError}</p>
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">Riprova</button>
+        </div>
+    );
+
+    // --- LAUNCHER VIEW ---
+    if (activeModule === 'launcher') {
+        return <GlobalDashboard user={user} data={data} onNavigateApp={(app) => { setActiveModule(app); setActiveTab('dashboard'); }} />;
+    }
+
+    const props = { 
+        candidates: data.candidates, 
+        jobs: data.jobs, 
+        applications: data.applications, 
+        refreshData: () => setRefreshTrigger(prev => prev + 1), 
+        currentUser: user,
+        onUpload: handleUploadFiles
+    };
+
+    // --- RECRUITMENT MODULE ---
+    if (activeModule === 'recruitment') {
+        switch (activeTab) {
+            case 'dashboard': return <DashboardView data={data} onNavigate={setActiveTab} currentUser={user} />;
+            case 'candidates': return <CandidateView {...props} />;
+            case 'recruitment': return <RecruitmentView data={data} refreshData={() => setRefreshTrigger(prev => prev + 1)} currentUser={user} onUpload={handleUploadFiles} />;
+            case 'onboarding': return <OnboardingView data={data} refreshData={() => setRefreshTrigger(prev => prev + 1)} currentUser={user} />;
+            case 'settings': return <SettingsView refreshData={() => setRefreshTrigger(prev => prev + 1)} onNavigate={setActiveTab} currentUser={user} />; 
+            default: return <CandidateView {...props} />;
+        }
+    }
+
+    // --- FLUXO MODULE (PLACEHOLDER) ---
+    if (activeModule === 'fluxo') {
+        if(activeTab === 'settings') return <SettingsView refreshData={() => setRefreshTrigger(prev => prev + 1)} onNavigate={setActiveTab} currentUser={user} />;
+        return <FluxoView data={data} user={user} />;
+    }
+
+    // --- HUMAN MODULE (PLACEHOLDER) ---
+    if (activeModule === 'human') {
+        if(activeTab === 'settings') return <SettingsView refreshData={() => setRefreshTrigger(prev => prev + 1)} onNavigate={setActiveTab} currentUser={user} />;
+        return <HumanView data={data} user={user} />;
+    }
+
+    return <div>Modulo non trovato.</div>;
+  };
+
+  const handleLogin = (loggedInUser: User) => {
+      setUser(loggedInUser);
+      if (!authInstance) localStorage.setItem('talentflow_user_session', JSON.stringify(loggedInUser));
+      setActiveModule('launcher'); // Reset to launcher on login
+  };
+
+  const handleLogout = () => {
+      if (authInstance) authInstance.signOut();
+      setUser(null);
+      localStorage.removeItem('talentflow_user_session');
+  };
+
+  // UPLOAD LOGIC KEPT SAME
   const handleUploadFiles = (files: File[], jobId?: string) => {
       const newItems: UploadQueueItem[] = files.map(file => ({ id: generateId(), file, status: 'IDLE', jobId }));
       setUploadQueue(prev => [...prev, ...newItems]);
       setIsUploadWidgetOpen(true);
   };
 
+  // Queue Processing Effect (Same as before)
   useEffect(() => {
       const processQueue = async () => {
           if (isProcessingQueue) return;
@@ -252,12 +326,11 @@ function App() {
             setUploadQueue(prev => prev.map(i => i.id === nextItem.id ? { ...i, status: 'PROCESSING' } : i));
             
             let base64 = '';
-            let finalMimeType = nextItem.file.type; // Default
+            let finalMimeType = nextItem.file.type; 
 
-            // OPTIMIZATION: Resize images before sending to AI
             if (nextItem.file.type.startsWith('image/')) {
                 base64 = await resizeImage(nextItem.file);
-                finalMimeType = 'image/jpeg'; // Resized image is always JPEG
+                finalMimeType = 'image/jpeg'; 
             } else {
                  base64 = await new Promise<string>((resolve, reject) => {
                     const reader = new FileReader();
@@ -295,7 +368,6 @@ function App() {
             } else {
                 await saveCandidateAndApp(fullCandidateData, nextItem.jobId, aiEvaluation);
                 setUploadQueue(prev => prev.map(i => i.id === nextItem.id ? { ...i, status: 'SUCCESS' } : i));
-                // FORCE DATA REFRESH HERE TO SHOW NEW CANDIDATE IMMEDIATELY
                 setRefreshTrigger(prev => prev + 1);
             }
 
@@ -360,50 +432,8 @@ function App() {
            }
           await saveCandidateAndApp(item.parsedData, item.jobId, aiEvaluation);
           setUploadQueue(prev => prev.map(i => i.id === itemId ? { ...i, status: 'SUCCESS' } : i));
-          setRefreshTrigger(prev => prev + 1); // Force refresh also on Force Save
+          setRefreshTrigger(prev => prev + 1);
       } catch(e) { console.error(e); } finally { setIsProcessingQueue(false); }
-  };
-
-  const handleLogin = (loggedInUser: User) => {
-      setUser(loggedInUser);
-      if (!authInstance) localStorage.setItem('talentflow_user_session', JSON.stringify(loggedInUser));
-  };
-
-  const handleLogout = () => {
-      if (authInstance) authInstance.signOut();
-      setUser(null);
-      localStorage.removeItem('talentflow_user_session');
-  };
-
-  const renderContent = () => {
-    if (loadingData) return <div className="flex items-center justify-center h-full text-gray-400"><Loader2 className="animate-spin mr-2"/> Caricamento dati...</div>;
-    
-    if (connectionError) return (
-        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-            <AlertTriangle className="text-red-500 mb-4" size={48} />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Errore Connessione</h2>
-            <p className="text-gray-500 mb-6">{connectionError}</p>
-            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">Riprova</button>
-        </div>
-    );
-
-    const props = { 
-        candidates: data.candidates, 
-        jobs: data.jobs, 
-        applications: data.applications, 
-        refreshData: () => setRefreshTrigger(prev => prev + 1), 
-        currentUser: user,
-        onUpload: handleUploadFiles
-    };
-
-    switch (activeTab) {
-      case 'dashboard': return <DashboardView data={data} onNavigate={setActiveTab} currentUser={user} />;
-      case 'candidates': return <CandidateView {...props} />;
-      case 'recruitment': return <RecruitmentView data={data} refreshData={() => setRefreshTrigger(prev => prev + 1)} currentUser={user} onUpload={handleUploadFiles} />;
-      case 'onboarding': return <OnboardingView data={data} refreshData={() => setRefreshTrigger(prev => prev + 1)} currentUser={user} />;
-      case 'settings': return <SettingsView refreshData={() => setRefreshTrigger(prev => prev + 1)} onNavigate={setActiveTab} currentUser={user} />; 
-      default: return <CandidateView {...props} />;
-    }
   };
 
   if (!user) return <LoginView onLogin={handleLogin} isCloudConfigured={!!db} />;
@@ -412,8 +442,10 @@ function App() {
   const duplicateCount = uploadQueue.filter(i => i.status === 'DUPLICATE').length;
 
   return (
-    <div className="flex min-h-screen bg-nature-gradient overflow-hidden relative">
+    <div className="flex min-h-screen bg-stone-50 overflow-hidden relative">
       <Sidebar 
+        activeModule={activeModule}
+        onModuleChange={handleModuleChange}
         activeTab={activeTab} 
         onTabChange={setActiveTab} 
         isCollapsed={isSidebarCollapsed}

@@ -1,8 +1,11 @@
-import React from 'react';
-import { LayoutDashboard, Users, Briefcase, Settings, ChevronLeft, ChevronRight, LogOut, Flag } from 'lucide-react';
-import { User, UserRole } from '../types';
+
+import React, { useState } from 'react';
+import { LayoutDashboard, Users, Briefcase, Settings, ChevronLeft, ChevronRight, LogOut, Flag, Grip, Euro, FileText, CheckCircle, ShieldCheck, GraduationCap, Building2 } from 'lucide-react';
+import { User, UserRole, AppModule } from '../types';
 
 interface SidebarProps {
+    activeModule: AppModule;
+    onModuleChange: (module: AppModule) => void;
     activeTab: string;
     onTabChange: (tab: string) => void;
     isCollapsed: boolean;
@@ -12,17 +15,13 @@ interface SidebarProps {
 }
 
 // Talentium Custom Logo Component
-const TalentiumLogo = ({ className = "w-8 h-8" }: { className?: string }) => (
+const TalentiumLogo = ({ className = "w-8 h-8", color = "#34d399" }: { className?: string, color?: string }) => (
     <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
         <defs>
             <linearGradient id="talentiumGradient" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#34d399" /> {/* Emerald-400 */}
-                <stop offset="1" stopColor="#0f766e" /> {/* Teal-700 */}
+                <stop stopColor={color} />
+                <stop offset="1" stopColor={color} stopOpacity="0.6" />
             </linearGradient>
-            <filter id="glow" x="-4" y="-4" width="48" height="48" filterUnits="userSpaceOnUse">
-                <feGaussianBlur stdDeviation="2" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
         </defs>
         <path d="M20 4L34 12V28L20 36L6 28V12L20 4Z" fill="url(#talentiumGradient)" fillOpacity="0.2" />
         <path d="M20 8L30 14V26L20 32L10 26V14L20 8Z" stroke="url(#talentiumGradient)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -31,47 +30,134 @@ const TalentiumLogo = ({ className = "w-8 h-8" }: { className?: string }) => (
     </svg>
 );
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isCollapsed, toggleCollapse, user, onLogout }) => {
-    const allMenuItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.HR] },
-        { id: 'candidates', label: 'Candidati', icon: Users, roles: [UserRole.ADMIN, UserRole.HR] },
-        { id: 'recruitment', label: 'Recruitment', icon: Briefcase, roles: [UserRole.ADMIN, UserRole.HR, UserRole.TEAM] },
-        { id: 'onboarding', label: 'Onboarding', icon: Flag, roles: [UserRole.ADMIN, UserRole.HR] },
-        { id: 'settings', label: 'Impostazioni', icon: Settings, roles: [UserRole.ADMIN] },
-    ];
+export const Sidebar: React.FC<SidebarProps> = ({ activeModule, onModuleChange, activeTab, onTabChange, isCollapsed, toggleCollapse, user, onLogout }) => {
+    const [isWaffleOpen, setIsWaffleOpen] = useState(false);
 
-    const filteredMenu = allMenuItems.filter(item => {
+    // Dynamic Menu Items based on Active Module
+    const getMenuItems = () => {
+        const commonSettings = { id: 'settings', label: 'Impostazioni', icon: Settings, roles: [UserRole.ADMIN] };
+        
+        switch (activeModule) {
+            case 'fluxo':
+                return [
+                    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.HR, UserRole.TEAM] },
+                    { id: 'expenses', label: 'Le Mie Spese', icon: Euro, roles: [UserRole.ADMIN, UserRole.HR, UserRole.TEAM] },
+                    { id: 'reports', label: 'Note Spese', icon: FileText, roles: [UserRole.ADMIN, UserRole.HR, UserRole.TEAM] },
+                    { id: 'approvals', label: 'Validazione', icon: CheckCircle, roles: [UserRole.ADMIN, UserRole.HR] },
+                    commonSettings
+                ];
+            case 'human':
+                return [
+                    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.HR] },
+                    { id: 'employees', label: 'Dipendenti', icon: Users, roles: [UserRole.ADMIN, UserRole.HR] },
+                    { id: 'training', label: 'Formazione', icon: GraduationCap, roles: [UserRole.ADMIN, UserRole.HR] },
+                    { id: 'safety', label: 'Sicurezza', icon: ShieldCheck, roles: [UserRole.ADMIN, UserRole.HR] },
+                    commonSettings
+                ];
+            case 'recruitment':
+            default:
+                return [
+                    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.HR] },
+                    { id: 'candidates', label: 'Candidati', icon: Users, roles: [UserRole.ADMIN, UserRole.HR] },
+                    { id: 'recruitment', label: 'Recruitment', icon: Briefcase, roles: [UserRole.ADMIN, UserRole.HR, UserRole.TEAM] },
+                    { id: 'onboarding', label: 'Onboarding', icon: Flag, roles: [UserRole.ADMIN, UserRole.HR] },
+                    commonSettings
+                ];
+        }
+    };
+
+    const menuItems = getMenuItems();
+    const filteredMenu = menuItems.filter(item => {
         if (!user) return false;
         return item.roles.includes(user.role as UserRole);
     });
 
+    const getModuleColor = (mod: AppModule) => {
+        switch(mod) {
+            case 'fluxo': return 'text-violet-600';
+            case 'human': return 'text-blue-600';
+            default: return 'text-emerald-600';
+        }
+    };
+    
+    const getModuleBg = (mod: AppModule) => {
+        switch(mod) {
+            case 'fluxo': return 'bg-violet-50 text-violet-700';
+            case 'human': return 'bg-blue-50 text-blue-700';
+            default: return 'bg-emerald-50 text-emerald-700';
+        }
+    };
+
+    const activeColorClass = activeModule === 'fluxo' ? 'bg-violet-50 text-violet-700' : activeModule === 'human' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700';
+    const activeBarClass = activeModule === 'fluxo' ? 'bg-violet-500' : activeModule === 'human' ? 'bg-blue-500' : 'bg-emerald-500';
+    const activeIconClass = activeModule === 'fluxo' ? 'text-violet-600' : activeModule === 'human' ? 'text-blue-600' : 'text-emerald-600';
+
     return (
-        <div className={`${isCollapsed ? 'w-20' : 'w-64'} glass-sidebar h-screen shadow-xl flex flex-col sticky top-0 transition-all duration-300 ease-in-out z-20 border-r border-white/20`}>
-            <div className={`p-6 flex ${isCollapsed ? 'justify-center' : 'justify-between'} items-center`}>
+        <div className={`${isCollapsed ? 'w-20' : 'w-64'} glass-sidebar h-screen shadow-xl flex flex-col sticky top-0 transition-all duration-300 ease-in-out z-30 border-r border-white/20`}>
+            {/* TOP HEADER WITH WAFFLE */}
+            <div className={`p-4 flex items-center ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between'}`}>
+                <div className="relative">
+                    <button 
+                        onClick={() => setIsWaffleOpen(!isWaffleOpen)}
+                        className="p-2 hover:bg-stone-100 rounded-lg transition-colors text-stone-600"
+                        title="Cambia Applicazione"
+                    >
+                        <Grip size={24} />
+                    </button>
+
+                    {/* WAFFLE MENU DROPDOWN */}
+                    {isWaffleOpen && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setIsWaffleOpen(false)}></div>
+                            <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-stone-100 p-4 z-50 animate-in fade-in slide-in-from-top-2 origin-top-left">
+                                <div className="text-xs font-bold text-stone-400 uppercase mb-3 px-2">Le tue Applicazioni</div>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button onClick={() => { onModuleChange('launcher'); setIsWaffleOpen(false); }} className="flex items-center gap-3 p-2 hover:bg-stone-50 rounded-lg transition-colors text-left group">
+                                        <div className="w-10 h-10 rounded-lg bg-stone-100 flex items-center justify-center group-hover:bg-stone-200 transition-colors"><LayoutDashboard className="text-stone-600"/></div>
+                                        <div><div className="font-bold text-stone-800">Dashboard</div><div className="text-xs text-stone-500">Panoramica Globale</div></div>
+                                    </button>
+                                    <button onClick={() => { onModuleChange('recruitment'); setIsWaffleOpen(false); }} className="flex items-center gap-3 p-2 hover:bg-emerald-50 rounded-lg transition-colors text-left group">
+                                        <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors"><TalentiumLogo className="w-6 h-6" color="#10b981"/></div>
+                                        <div><div className="font-bold text-emerald-900">Recruitment</div><div className="text-xs text-emerald-600">ATS & Onboarding</div></div>
+                                    </button>
+                                    <button onClick={() => { onModuleChange('fluxo'); setIsWaffleOpen(false); }} className="flex items-center gap-3 p-2 hover:bg-violet-50 rounded-lg transition-colors text-left group">
+                                        <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center group-hover:bg-violet-200 transition-colors"><Euro className="w-6 h-6 text-violet-600"/></div>
+                                        <div><div className="font-bold text-violet-900">Fluxo</div><div className="text-xs text-violet-600">Spese e Rimborsi</div></div>
+                                    </button>
+                                    <button onClick={() => { onModuleChange('human'); setIsWaffleOpen(false); }} className="flex items-center gap-3 p-2 hover:bg-blue-50 rounded-lg transition-colors text-left group">
+                                        <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors"><Users className="w-6 h-6 text-blue-600"/></div>
+                                        <div><div className="font-bold text-blue-900">Human</div><div className="text-xs text-blue-600">HR Core & Safety</div></div>
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+
                 {!isCollapsed && (
-                    <div className="flex items-center gap-3 text-emerald-800 overflow-hidden whitespace-nowrap animate-in fade-in">
-                        <div className="bg-white/50 p-1.5 rounded-xl shadow-sm">
-                            <TalentiumLogo className="w-8 h-8" />
-                        </div>
-                        <h1 className="text-2xl font-serif font-bold tracking-tight text-emerald-950">Talentium</h1>
-                    </div>
-                )}
-                {isCollapsed && (
-                    <div className="bg-white/50 p-2 rounded-xl shadow-sm">
-                        <TalentiumLogo className="w-8 h-8" />
+                    <div className="flex flex-col overflow-hidden">
+                        <h1 className="text-xl font-serif font-bold tracking-tight text-stone-900 leading-none">Talentium</h1>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest ${getModuleColor(activeModule)}`}>
+                            {activeModule === 'launcher' ? 'Suite' : activeModule}
+                        </span>
                     </div>
                 )}
                 
                 <button 
                     onClick={toggleCollapse}
-                    className={`text-stone-400 hover:text-emerald-600 transition-colors ${isCollapsed ? 'hidden' : ''}`}
+                    className={`text-stone-400 hover:text-stone-600 transition-colors ${isCollapsed ? 'hidden' : ''}`}
                 >
                     <ChevronLeft size={20} />
                 </button>
             </div>
 
             <nav className="flex-1 px-3 py-4 space-y-1">
-                {filteredMenu.map((item) => {
+                {activeModule === 'launcher' ? (
+                    <div className="px-4 py-4 text-center">
+                        <p className="text-xs text-stone-500 mb-2">Seleziona un'app dal menu</p>
+                        <div className="animate-bounce mt-2 text-stone-300"><Grip size={24} className="mx-auto"/></div>
+                    </div>
+                ) : filteredMenu.map((item) => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
                     return (
@@ -81,15 +167,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isColl
                             title={isCollapsed ? item.label : ''}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group relative ${
                                 isActive 
-                                ? 'bg-emerald-50/80 text-emerald-700 shadow-sm font-semibold backdrop-blur-md' 
+                                ? `${activeColorClass} shadow-sm font-semibold backdrop-blur-md` 
                                 : 'text-stone-500 hover:bg-white/50 hover:text-stone-800'
                             } ${isCollapsed ? 'justify-center px-0' : ''}`}
                         >
-                            {isActive && <div className="absolute left-0 w-1 h-6 bg-emerald-500 rounded-r-full"></div>}
-                            <Icon size={20} className={`shrink-0 transition-transform group-hover:scale-110 duration-200 ${isActive ? 'text-emerald-600' : 'text-stone-400 group-hover:text-stone-600'}`} />
+                            {isActive && <div className={`absolute left-0 w-1 h-6 rounded-r-full ${activeBarClass}`}></div>}
+                            <Icon size={20} className={`shrink-0 transition-transform group-hover:scale-110 duration-200 ${isActive ? activeIconClass : 'text-stone-400 group-hover:text-stone-600'}`} />
                             {!isCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
                             
-                            {/* Tooltip for collapsed mode */}
                             {isCollapsed && (
                                 <div className="absolute left-16 bg-stone-800 text-white text-xs px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-50 whitespace-nowrap shadow-lg translate-x-[-10px] group-hover:translate-x-0">
                                     {item.label}
@@ -123,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isColl
                             </button>
                         </div>
                         
-                        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-3 text-white text-center shadow-lg shadow-emerald-200 relative overflow-hidden group">
+                        <div className="bg-gradient-to-r from-stone-700 to-stone-900 rounded-xl p-3 text-white text-center shadow-lg relative overflow-hidden group">
                             <div className="absolute top-0 left-0 w-full h-full bg-white/10 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                             <p className="text-[10px] opacity-80 uppercase tracking-wider font-medium">Powered by</p>
                             <p className="font-bold text-xs flex items-center justify-center gap-1">Google Gemini 2.5 <SparklesIcon/></p>

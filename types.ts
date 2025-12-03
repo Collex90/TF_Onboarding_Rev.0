@@ -1,5 +1,4 @@
 
-
 export enum SelectionStatus {
   TO_ANALYZE = 'DA_ANALIZZARE',
   SCREENING = 'TELEFONATA_CONOSCITIVA',
@@ -54,6 +53,9 @@ export enum UserRole {
     TEAM = 'TEAM'
 }
 
+// --- NEW MULTI-APP TYPES ---
+export type AppModule = 'launcher' | 'recruitment' | 'fluxo' | 'human' | 'settings';
+
 export interface User {
     uid?: string; // Firestore Auth ID
     name: string;
@@ -61,6 +63,8 @@ export interface User {
     role: UserRole | string; // Supports enum or string
     avatar?: string;
     isDeleted?: boolean; // Soft delete flag
+    // Future expansion: access rights per app
+    allowedApps?: AppModule[]; 
 }
 
 export interface Comment {
@@ -111,6 +115,76 @@ export interface Candidate {
   isDeleted?: boolean; // Soft Delete flag
 
   createdAt: number;
+}
+
+// --- FLUXO TYPES (EXPENSES) ---
+export enum ExpenseCategory {
+    MEALS = 'VITTO',
+    TRANSPORT = 'TRASPORTI',
+    ACCOMMODATION = 'ALLOGGIO',
+    OTHER = 'ALTRO'
+}
+
+export interface Expense {
+    id: string;
+    userId: string;
+    date: number;
+    amount: number;
+    currency: string;
+    category: ExpenseCategory;
+    merchant?: string;
+    description?: string;
+    attachment?: Attachment;
+    status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+    reportId?: string; // Link to Expense Report
+    createdAt: number;
+}
+
+// --- HUMAN TYPES (EMPLOYEES) ---
+export enum EmployeeStatus {
+    ACTIVE = 'ACTIVE',
+    ON_LEAVE = 'ON_LEAVE', // Ferie/Malattia/Maternità
+    TERMINATED = 'TERMINATED'
+}
+
+export const EmployeeStatusLabels: Record<EmployeeStatus, string> = {
+    [EmployeeStatus.ACTIVE]: 'Attivo',
+    [EmployeeStatus.ON_LEAVE]: 'In Permesso',
+    [EmployeeStatus.TERMINATED]: 'Terminato'
+};
+
+export const EmployeeStatusColors: Record<EmployeeStatus, string> = {
+    [EmployeeStatus.ACTIVE]: 'bg-green-50 text-green-700 border-green-200',
+    [EmployeeStatus.ON_LEAVE]: 'bg-amber-50 text-amber-700 border-amber-200',
+    [EmployeeStatus.TERMINATED]: 'bg-red-50 text-red-700 border-red-200'
+};
+
+export interface Employee {
+    id: string;
+    candidateId?: string; // Link back to recruitment if hired from there
+    
+    // Personal Info
+    firstName: string;
+    lastName: string;
+    email: string; // Personal or Work email
+    phone?: string;
+    birthDate?: number;
+    taxId?: string; // Codice Fiscale
+    address?: string;
+    
+    // Job Info
+    role: string;
+    department: string;
+    managerId?: string; // Reporting line
+    startDate: number;
+    contractType?: 'FULL_TIME' | 'PART_TIME' | 'INTERN' | 'CONTRACTOR';
+    
+    // System
+    status: EmployeeStatus;
+    photo?: string;
+    photoUrl?: string;
+    isDeleted?: boolean;
+    createdAt: number;
 }
 
 // --- SCORECARD INTERFACES ---
@@ -244,6 +318,8 @@ export interface AppState {
   applications: Application[];
   onboarding: OnboardingProcess[];
   companyInfo?: CompanyInfo;
+  employees: Employee[]; // Now required
+  expenses?: Expense[]; 
 }
 
 export interface UploadQueueItem {
@@ -274,7 +350,7 @@ export interface BackupMetadata {
 
 export interface DeletedItem {
     id: string;
-    type: 'candidate' | 'application' | 'job'; // Add other types if needed
-    name: string; // Display name
-    deletedAt?: number; // Not strictly tracked in schema yet, but good for future
+    type: 'candidate' | 'application' | 'job' | 'employee'; 
+    name: string; 
+    deletedAt?: number;
 }
