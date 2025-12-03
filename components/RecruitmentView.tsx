@@ -26,6 +26,16 @@ const JOB_STATUS_CONFIG: Record<string, { label: string, color: string, dot: str
     'CLOSED': { label: 'CHIUSA', color: 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100', dot: 'bg-stone-500' }
 };
 
+// Helper per calcolare il punteggio basandosi SOLO sullo schema attuale (ignorando item cancellati)
+const calculateSafeScore = (app: Application, schema?: ScorecardSchema): number => {
+    if (!schema || !app.scorecardResults) return 0;
+    return schema.categories.reduce((acc, cat) => {
+        return acc + cat.items.reduce((iAcc, item) => {
+            return iAcc + (app.scorecardResults?.[item.id] || 0);
+        }, 0);
+    }, 0);
+};
+
 export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshData, currentUser, onUpload }) => {
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [isJobModalOpen, setIsJobModalOpen] = useState(false);
@@ -214,9 +224,11 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
             // --- STEP 3: HANDLE CANDIDATES (ONLY FOR NEW OR EDIT) ---
             if (targetJobId) {
+                const finalJobId = targetJobId as string; // Capture explicitly for closures
+
                 // 1. Upload Files
                 if (wizardFiles.length > 0) {
-                    onUpload(wizardFiles, targetJobId);
+                    onUpload(wizardFiles, finalJobId);
                 }
 
                 // 2. Associate Existing Candidates
@@ -224,12 +236,12 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     const promises = Array.from(wizardSelectedCandidateIds).map(async (candidateId) => {
                         const candidate = data.candidates.find(c => c.id === candidateId);
                         // Only add if not already applied
-                        const exists = data.applications.some(a => a.candidateId === candidateId && a.jobId === targetJobId);
+                        const exists = data.applications.some(a => a.candidateId === candidateId && a.jobId === finalJobId);
                         if (!exists) {
                             let aiScore, aiReasoning;
                             if (candidate) {
                                 try {
-                                    const job = editingJobId ? data.jobs.find(j => j.id === editingJobId) : { ...commonData, id: targetJobId! } as JobPosition;
+                                    const job = editingJobId ? data.jobs.find(j => j.id === editingJobId) : { ...commonData, id: finalJobId } as JobPosition;
                                     const fit = await evaluateFit(candidate, job!, data.companyInfo);
                                     aiScore = fit.score;
                                     aiReasoning = fit.reasoning;
@@ -238,7 +250,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                             const app: Application = {
                                 id: generateId(),
                                 candidateId,
-                                jobId: targetJobId!,
+                                jobId: finalJobId,
                                 status: SelectionStatus.TO_ANALYZE,
                                 aiScore,
                                 aiReasoning,
@@ -368,9 +380,10 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
 
     const handleBatchAddToPipeline = async () => { 
         if (!selectedJobId || selectedAssociateIds.size === 0) return; 
+        const currentJobId = selectedJobId; // Capture specifically for closure
         setIsAssociating(true); 
         try { 
-            const job = data.jobs.find(j => j.id === selectedJobId); 
+            const job = data.jobs.find(j => j.id === currentJobId); 
             if (!job) return; 
             const promises = Array.from(selectedAssociateIds).map(async (candidateId: string) => { 
                 const candidate = data.candidates.find(c => c.id === candidateId); 
@@ -383,7 +396,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         aiReasoning = fit.reasoning; 
                     } catch (e) { console.error(e); } 
                 } 
-                const app: Application = { id: generateId(), candidateId, jobId: selectedJobId, status: SelectionStatus.TO_ANALYZE, aiScore, aiReasoning, updatedAt: Date.now() }; 
+                const app: Application = { id: generateId(), candidateId, jobId: currentJobId, status: SelectionStatus.TO_ANALYZE, aiScore, aiReasoning, updatedAt: Date.now() }; 
                 return createApplication(app); 
             }); 
             await Promise.all(promises); 
@@ -573,8 +586,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                     case 'status': valA = StatusLabels[a.status]; valB = StatusLabels[b.status]; break; 
                     case 'aiScore': valA = a.aiScore || 0; valB = b.aiScore || 0; break; 
                     case 'score': 
-                        valA = Object.values(a.scorecardResults || {}).reduce((sum: number, v: number) => sum + v, 0);
-                        valB = Object.values(b.scorecardResults || {}).reduce((sum: number, v: number) => sum + v, 0);
+                        valA = calculateSafeScore(a, selectedJob?.scorecardSchema);
+                        valB = calculateSafeScore(b, selectedJob?.scorecardSchema);
                         break;
                     default: return 0; 
                 } 
@@ -584,7 +597,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
             }); 
         } 
         return filtered; 
-    }, [data.applications, selectedJobId, searchTerm, data.candidates, sortConfig]);
+    }, [data.applications, selectedJobId, searchTerm, data.candidates, sortConfig, selectedJob]); // Added selectedJob dependency
     
     const availableCandidatesForWizard = useMemo(() => { 
         const term = associateSearch.toLowerCase(); 
@@ -695,7 +708,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         if (!candidate) return null;
                         const isDragging = draggedAppId === app.id;
                         const priorityColor = app.priority === 'HIGH' ? 'bg-red-100 text-red-800 border-red-200' : app.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : app.priority === 'LOW' ? 'bg-blue-100 text-blue-800 border-blue-200' : null;
-                        const totalScore = app.scorecardResults ? (Object.values(app.scorecardResults) as number[]).reduce((sum: number, v: number) => sum + v, 0) : 0;
+                        const totalScore = calculateSafeScore(app, selectedJob?.scorecardSchema);
                         const maxScore = selectedJob?.scorecardSchema ? selectedJob.scorecardSchema.categories.reduce((acc, cat) => acc + cat.items.length * 5, 0) : 0;
 
                         return (
@@ -1216,7 +1229,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                 data.applications
                                                     .filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults)
                                                     .reduce((acc, curr) => {
-                                                        const appTotal = Object.values(curr.scorecardResults || {}).reduce((sum: number, v: number) => sum + v, 0);
+                                                        const appTotal = calculateSafeScore(curr, jobInfoTarget.scorecardSchema);
                                                         return acc + appTotal;
                                                     }, 0) /
                                                 (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults).length || 1)
@@ -1241,253 +1254,6 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         </div>
                     </div>
                 )}
-
-            </div>
-        );
-    }
-
-    return (
-        <div className="h-full flex flex-col bg-stone-50/50">
-            {/* TOOLBAR */}
-            <div className="bg-white/80 backdrop-blur-md border-b border-stone-200 px-6 py-3 flex justify-between items-center shadow-sm shrink-0 z-20">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => setSelectedJobId(null)} className="flex items-center gap-1 text-stone-500 hover:text-emerald-600 transition-colors text-sm font-bold"><ArrowRight size={16} className="rotate-180" /> Torna alle posizioni</button>
-                    <div className="h-6 w-px bg-stone-200"></div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-lg font-bold text-stone-900 leading-tight font-serif">{selectedJob?.title}</h2>
-                            <button onClick={() => selectedJob && setViewingJobInfoId(selectedJob.id)} className="text-stone-400 hover:text-emerald-600 transition-colors" title="Info Posizione">
-                                <Info size={18}/>
-                            </button>
-                        </div>
-                        <p className="text-xs text-stone-500 font-medium">{selectedJob?.department}</p>
-                    </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold ${selectedJob?.status === 'OPEN' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-stone-100 text-stone-600 border-stone-200'}`}>{selectedJob?.status}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="relative group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 group-hover:text-emerald-500 transition-colors" size={14} /><input type="text" placeholder="Filtra candidati..." className="pl-9 pr-4 py-1.5 bg-stone-100 border-transparent focus:bg-white focus:border-emerald-300 rounded-lg text-sm outline-none transition-all w-48 focus:w-64 focus:ring-2 focus:ring-emerald-100" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-                    {selectedJob?.scorecardSchema && (
-                        <button onClick={() => { setIsComparisonModalOpen(true); setMatrixSelectedCandidateIds(new Set()); }} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-bold border border-indigo-200 transition-colors shadow-sm">
-                            <BarChart2 size={16} /> Confronta
-                        </button>
-                    )}
-                    <div className="flex bg-stone-100 p-1 rounded-lg border border-stone-200">
-                        <button onClick={() => setViewMode('kanban')} className={`p-1.5 rounded transition-all ${viewMode === 'kanban' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}><Kanban size={16} /></button>
-                        <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded transition-all ${viewMode === 'grid' ? 'bg-white text-emerald-600 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}><LayoutGrid size={16} /></button>
-                    </div>
-                    <input type="file" multiple accept=".pdf,image/*" className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
-                    <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold transition-all"><UploadCloud size={16} /> Importa CV</button>
-                    {currentUser?.role !== UserRole.TEAM && (
-                        <button onClick={() => setIsAssociateModalOpen(true)} className="bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 hover:text-emerald-700 px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold transition-colors"><Plus size={16} /> Associa Esistente</button>
-                    )}
-                </div>
-            </div>
-
-            {/* CONTENT */}
-            <div className="flex-1 overflow-hidden relative">
-                {viewMode === 'kanban' ? (
-                    <div className="h-full overflow-x-auto overflow-y-hidden p-6 flex gap-6 custom-scrollbar">
-                        {renderColumn(SelectionStatus.TO_ANALYZE)}
-                        {renderColumn(SelectionStatus.SCREENING)}
-                        {renderColumn(SelectionStatus.FIRST_INTERVIEW)}
-                        {renderColumn(SelectionStatus.SECOND_INTERVIEW)}
-                        {renderColumn(SelectionStatus.OFFER)}
-                        {renderColumn(SelectionStatus.HIRED)}
-                        {renderColumn(SelectionStatus.REJECTED)}
-                    </div>
-                ) : (
-                    <div className="h-full p-6 overflow-hidden flex flex-col">
-                        <div className="glass-card bg-white/70 backdrop-blur-xl border border-white rounded-2xl shadow-sm overflow-hidden flex flex-col flex-1">
-                            {/* ... Grid View content ... */}
-                            <div className="overflow-auto flex-1 custom-scrollbar">
-                                <table className="w-full text-left border-collapse relative">
-                                    <thead className="bg-stone-50/90 backdrop-blur-md sticky top-0 z-10 shadow-sm text-xs text-stone-500 font-semibold uppercase tracking-wider">
-                                        <tr>
-                                            <SortHeader label="Candidato" sortKey="candidate" />
-                                            <SortHeader label="Età" sortKey="age" />
-                                            <SortHeader label="Valutazione" sortKey="rating" />
-                                            <SortHeader label="Priorità" sortKey="priority" />
-                                            <SortHeader label="Stato" sortKey="status" />
-                                            <SortHeader label="AI Fit" sortKey="aiScore" />
-                                            <SortHeader label="Score" sortKey="score" />
-                                            <th className="p-4 w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-sm divide-y divide-stone-100">
-                                        {applicationsForJob.map(app => {
-                                            const candidate = data.candidates.find(c => c.id === app.candidateId);
-                                            if (!candidate) return null;
-                                            const totalScore = app.scorecardResults ? (Object.values(app.scorecardResults) as number[]).reduce((sum: number, v: number) => sum + v, 0) : 0;
-                                            const maxScore = selectedJob?.scorecardSchema ? selectedJob.scorecardSchema.categories.reduce((acc, cat) => acc + cat.items.length * 5, 0) : 0;
-
-                                            return (
-                                                <tr key={app.id} className="hover:bg-emerald-50/30 transition-colors group" onClick={() => openQuickView(app, candidate)}>
-                                                    <td className="p-4 font-bold text-stone-900 flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center overflow-hidden border border-stone-200">{candidate.photo ? <img src={`data:image/jpeg;base64,${candidate.photo}`} className="w-full h-full object-cover"/> : candidate.fullName.charAt(0)}</div>
-                                                        {candidate.fullName}
-                                                    </td>
-                                                    <td className="p-4 text-stone-600">{candidate.age || '-'}</td>
-                                                    <td className="p-4" onClick={e => e.stopPropagation()}>
-                                                        <div className="flex">{[1,2,3,4,5].map(star => (<Star key={star} size={14} className={`cursor-pointer transition-colors ${star <= (app.rating || 0) ? 'fill-amber-400 text-amber-400' : 'text-stone-300 hover:text-amber-200'}`} onClick={() => handleInlineRatingChange(app.id, star)}/>))}</div>
-                                                    </td>
-                                                    <td className="p-4" onClick={e => e.stopPropagation()}>
-                                                        <div className="relative">
-                                                            <select 
-                                                                value={app.priority || 'LOW'} 
-                                                                onChange={(e) => handleInlinePriorityChange(app.id, e.target.value as any)} 
-                                                                className={`appearance-none bg-transparent hover:bg-white/60 focus:bg-white border border-transparent focus:border-stone-200 rounded px-2 py-1 text-xs font-bold outline-none cursor-pointer w-full transition-all ${app.priority === 'HIGH' ? 'text-red-700' : app.priority === 'MEDIUM' ? 'text-yellow-800' : 'text-blue-700'}`}
-                                                            >
-                                                                <option value="LOW">LOW</option><option value="MEDIUM">MEDIUM</option><option value="HIGH">HIGH</option>
-                                                            </select>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4" onClick={e => e.stopPropagation()}>
-                                                        <div className="relative">
-                                                            <select 
-                                                                value={app.status} 
-                                                                onChange={(e) => handleInlineStatusChange(app.id, e.target.value as any)} 
-                                                                className={`appearance-none bg-transparent hover:bg-white/60 focus:bg-white border border-transparent focus:border-emerald-200 rounded px-2 py-1 text-xs font-bold outline-none cursor-pointer w-full transition-all ${StatusColors[app.status]}`}
-                                                            >
-                                                                {Object.values(SelectionStatus).map(s => (<option key={s} value={s}>{StatusLabels[s]}</option>))}
-                                                            </select>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4"><div className={`text-xs font-bold px-2 py-1 rounded inline-flex items-center gap-1 border ${(app.aiScore || 0) >= 80 ? 'bg-green-50 text-green-700 border-green-100' : (app.aiScore || 0) >= 50 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : 'bg-red-50 text-red-700 border-red-100'}`}><BrainCircuit size={12}/> {app.aiScore}%</div></td>
-                                                    <td className="p-4 font-bold text-indigo-700">{totalScore > 0 ? `${totalScore}/${maxScore}` : '-'}</td>
-                                                    <td className="p-4"><button onClick={(e) => { e.stopPropagation(); openQuickView(app, candidate); }} className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"><Eye size={18}/></button></td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* JOB INFO QUICK VIEW OVERLAY */}
-            {viewingJobInfoId && jobInfoTarget && (
-                <div className="fixed inset-0 bg-stone-900/30 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }}>
-                    <div className="bg-white/95 h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-lg border-l border-white" onClick={e => e.stopPropagation()}>
-                        <div className="p-6 border-b border-stone-100 bg-stone-50/80 flex justify-between items-start shrink-0 relative z-50">
-                             <div>
-                                <h3 className="text-2xl font-bold text-stone-900 mb-2 font-serif">{jobInfoTarget.title}</h3>
-                                <div className="flex items-center gap-3 text-sm">
-                                    <span className="bg-white border border-stone-200 px-2 py-0.5 rounded text-stone-600 font-medium shadow-sm">{jobInfoTarget.department}</span>
-                                    {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) ? (
-                                        <div className="relative">
-                                            <button 
-                                                onClick={() => setIsJobStatusDropdownOpen(!isJobStatusDropdownOpen)}
-                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs border transition-all duration-200 shadow-sm ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.color || 'bg-stone-100 border-stone-200 text-stone-700'}`}
-                                            >
-                                                <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-stone-400'}`}></span>
-                                                {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
-                                                <ChevronDownIcon size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
-                                            </button>
-
-                                            {/* CUSTOM DROPDOWN MENU */}
-                                            {isJobStatusDropdownOpen && (
-                                                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-stone-100 overflow-hidden animate-in slide-in-from-top-2 z-[100]">
-                                                    <div className="p-1">
-                                                        {Object.entries(JOB_STATUS_CONFIG).map(([key, config]) => (
-                                                            <button
-                                                                key={key}
-                                                                onClick={async () => {
-                                                                    await updateJob({ ...jobInfoTarget, status: key as any });
-                                                                    refreshData();
-                                                                    setIsJobStatusDropdownOpen(false);
-                                                                }}
-                                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-stone-50 transition-colors ${jobInfoTarget.status === key ? 'bg-stone-50 text-stone-900' : 'text-stone-600'}`}
-                                                            >
-                                                                <span className={`w-2 h-2 rounded-full ${config.dot}`}></span>
-                                                                {config.label}
-                                                                {jobInfoTarget.status === key && <Check size={14} className="ml-auto text-emerald-600"/>}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <span className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-2 border ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.color || 'bg-stone-100 border-stone-200 text-stone-700'}`}>
-                                            <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-stone-400'}`}></span>
-                                            {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            <button onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }} className="text-stone-400 hover:text-stone-600"><X size={24}/></button>
-                        </div>
-                        
-                        {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
-                            <div className="px-6 pt-4">
-                                <button 
-                                    onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); openEditJobModal(jobInfoTarget); }}
-                                    className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors"
-                                >
-                                    <Edit size={16} /> Modifica Dati Posizione
-                                </button>
-                            </div>
-                        )}
-
-                        <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar space-y-6">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                                    <span className="text-xs font-bold text-blue-700 uppercase">Totale Candidati</span>
-                                    <div className="text-2xl font-bold text-blue-900 mt-1">
-                                        {data.applications.filter(a => a.jobId === jobInfoTarget.id).length}
-                                    </div>
-                                </div>
-                                <div className="bg-green-50 p-3 rounded-xl border border-green-100">
-                                    <span className="text-xs font-bold text-green-700 uppercase">Assunti</span>
-                                    <div className="text-2xl font-bold text-green-900 mt-1">
-                                        {data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.HIRED).length}
-                                    </div>
-                                </div>
-                                <div className="bg-purple-50 p-3 rounded-xl border border-purple-100">
-                                    <span className="text-xs font-bold text-purple-700 uppercase">Media Fit AI</span>
-                                    <div className="text-2xl font-bold text-purple-900 mt-1 flex items-center gap-1">
-                                        <BrainCircuit size={18}/>
-                                        {Math.round(
-                                            data.applications.filter(a => a.jobId === jobInfoTarget.id && a.aiScore).reduce((acc, curr) => acc + (curr.aiScore || 0), 0) / 
-                                            (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.aiScore).length || 1)
-                                        )}%
-                                    </div>
-                                </div>
-                                <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
-                                    <span className="text-xs font-bold text-yellow-700 uppercase">Media Score</span>
-                                    <div className="text-2xl font-bold text-yellow-900 mt-1 flex items-center gap-1">
-                                        <Ruler size={18}/>
-                                        {(
-                                            data.applications
-                                                .filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults)
-                                                .reduce((acc, curr) => {
-                                                    const appTotal = Object.values(curr.scorecardResults || {}).reduce((sum: number, v: number) => sum + v, 0);
-                                                    return acc + appTotal;
-                                                }, 0) /
-                                            (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults).length || 1)
-                                        ).toFixed(1)}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 text-sm bg-stone-50 p-4 rounded-xl border border-stone-100">
-                                <div>
-                                    <span className="block text-xs font-bold text-stone-400 uppercase mb-1">Data Creazione</span>
-                                    <span className="font-medium text-stone-900">{new Date(jobInfoTarget.createdAt).toLocaleDateString()}</span>
-                                </div>
-                                <div>
-                                    <span className="block text-xs font-bold text-stone-400 uppercase mb-1">Scartati</span>
-                                    <span className="font-medium text-stone-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.REJECTED).length}</span>
-                                </div>
-                            </div>
-                            <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><FileText size={14}/> Descrizione Posizione</h4><div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">{jobInfoTarget.description || "Nessuna descrizione disponibile."}</div></div>
-                            <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><ListChecks size={14}/> Requisiti</h4><div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">{jobInfoTarget.requirements || "Nessun requisito specificato."}</div></div>
-                            <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><Users size={14}/> Team di Selezione</h4><div className="bg-white border border-stone-200 rounded-xl overflow-hidden">{!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (<p className="p-4 text-sm text-stone-400 italic">Nessun membro assegnato.</p>) : (jobInfoTarget.assignedTeamMembers.map(uid => { const u = availableUsers.find(user => user.uid === uid); return (<div key={uid} className="flex items-center gap-3 p-3 hover:bg-stone-50 border-b border-stone-50 last:border-0"><div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-emerald-600 border border-stone-200">{u ? u.name.charAt(0) : '?'}</div><div><p className="text-sm font-bold text-stone-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p><p className="text-xs text-stone-500">{u ? u.role : 'Membro Team'}</p></div></div>)}))}</div></div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* QUICK VIEW OVERLAY */}
             {viewingApp && (
@@ -1584,7 +1350,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                     <div className="flex justify-between items-end bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                                                         <div><h4 className="text-indigo-900 font-bold text-lg">Punteggio Totale</h4><p className="text-indigo-600 text-xs">Somma delle valutazioni</p></div>
                                                         <div className="text-3xl font-bold text-indigo-700">
-                                                            {Object.values(viewingApp.app.scorecardResults || {}).reduce((a: number, b: number) => a + b, 0)}
+                                                            {calculateSafeScore(viewingApp.app, selectedJob.scorecardSchema)}
                                                             <span className="text-sm text-indigo-400 font-medium"> / {selectedJob.scorecardSchema.categories.reduce((acc, cat) => acc + cat.items.length * 5, 0)}</span>
                                                         </div>
                                                     </div>
@@ -1843,7 +1609,7 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                 <tr className="bg-indigo-50/50 font-bold">
                                                     <td className="p-4 text-indigo-900">PUNTEGGIO TOTALE</td>
                                                     {matrixCandidates.map(app => {
-                                                        const total = Object.values(app.scorecardResults || {}).reduce((a: number, b: number) => a + b, 0);
+                                                        const total = calculateSafeScore(app, selectedJob.scorecardSchema);
                                                         return <td key={app.id} className="p-4 text-center text-indigo-700 text-lg border-l border-indigo-100">{total}</td>;
                                                     })}
                                                 </tr>
