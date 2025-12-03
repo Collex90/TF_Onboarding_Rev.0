@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AppState, JobPosition, SelectionStatus, StatusLabels, StatusColors, Candidate, Application, User, Comment, UserRole, EmailTemplate, ScorecardSchema, ScorecardCategory, ScorecardTemplate, Attachment } from '../types';
 import { Plus, ChevronRight, Sparkles, BrainCircuit, Search, GripVertical, UploadCloud, X, Loader2, CheckCircle, AlertTriangle, FileText, Star, Flag, Calendar, Download, Phone, Briefcase, MessageSquare, Clock, Send, Building, Banknote, Maximize2, Minimize2, Eye, ZoomIn, ZoomOut, Mail, LayoutGrid, Kanban, UserPlus, ArrowRight, CheckSquare, Square, ChevronUp, ChevronDown, Edit, Shield, Users, Trash2, Copy, BarChart2, ListChecks, Ruler, Circle, Save, Filter, Settings, Paperclip, Upload, Table, Image, ExternalLink, Info, RefreshCw, PieChart, TrendingUp, Check, ArrowLeft, ChevronDown as ChevronDownIcon } from 'lucide-react';
@@ -237,7 +238,8 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                         // Only add if not already applied
                         const exists = data.applications.some(a => a.candidateId === candidateId && a.jobId === finalJobId);
                         if (!exists) {
-                            let aiScore, aiReasoning;
+                            let aiScore: number | undefined;
+                            let aiReasoning: string | undefined;
                             if (candidate) {
                                 try {
                                     const job = editingJobId ? data.jobs.find(j => j.id === editingJobId) : { ...commonData, id: finalJobId } as JobPosition;
@@ -957,3 +959,314 @@ export const RecruitmentView: React.FC<RecruitmentViewProps> = ({ data, refreshD
                                                 ))}
                                                 
                                                 <button onClick={handleAddCategory} className="w-full py-4 border-2 border-dashed border-stone-300 rounded-xl text-stone-400 hover:text-emerald-600 hover:border-emerald-400 hover:bg-white transition-all font-bold flex items-center justify-center gap-2">
+                                                    <Plus size={20}/> Aggiungi Nuova Categoria
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 3: CANDIDATES */}
+                                {creationStep === 3 && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-right-4">
+                                        {/* IMPORT CV AREA */}
+                                        <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-200 flex flex-col">
+                                            <h3 className="text-xl font-bold text-stone-900 mb-2 flex items-center gap-2"><UploadCloud size={24} className="text-emerald-600"/> Importa CV</h3>
+                                            <p className="text-stone-500 text-sm mb-6">Carica i CV dei candidati per questa posizione. L'AI estrarrà automaticamente i dati.</p>
+                                            
+                                            <div 
+                                                className="flex-1 border-2 border-dashed border-stone-300 rounded-xl bg-stone-50 flex flex-col items-center justify-center p-8 hover:bg-emerald-50/30 hover:border-emerald-400 transition-all cursor-pointer relative"
+                                                onClick={() => wizardFileInputRef.current?.click()}
+                                            >
+                                                <input 
+                                                    type="file" 
+                                                    multiple 
+                                                    accept=".pdf,image/*" 
+                                                    className="hidden" 
+                                                    ref={wizardFileInputRef} 
+                                                    onChange={(e) => {
+                                                        if (e.target.files) {
+                                                            setWizardFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                        }
+                                                    }}
+                                                />
+                                                <UploadCloud size={48} className="text-stone-300 mb-4"/>
+                                                <p className="font-bold text-stone-700">Clicca per caricare i file</p>
+                                                <p className="text-xs text-stone-400 mt-2">Supporta PDF e Immagini</p>
+                                            </div>
+
+                                            {wizardFiles.length > 0 && (
+                                                <div className="mt-4 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                                    {wizardFiles.map((f, i) => (
+                                                        <div key={i} className="flex justify-between items-center p-3 bg-stone-50 rounded-lg border border-stone-100">
+                                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                                <FileText size={16} className="text-stone-400 shrink-0"/>
+                                                                <span className="text-sm font-medium text-stone-700 truncate">{f.name}</span>
+                                                            </div>
+                                                            <button onClick={() => setWizardFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600"><X size={16}/></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* ASSOCIATE EXISTING */}
+                                        <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-200 flex flex-col h-[500px]">
+                                            <div className="mb-6">
+                                                <h3 className="text-xl font-bold text-stone-900 mb-2 flex items-center gap-2"><Users size={24} className="text-indigo-600"/> Associa dal Database</h3>
+                                                <div className="relative mt-4">
+                                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400" size={18}/>
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Cerca candidato..." 
+                                                        className="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                        value={associateSearch}
+                                                        onChange={e => setAssociateSearch(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 border border-stone-100 rounded-xl p-2 bg-stone-50/30">
+                                                {availableCandidatesForWizard.length === 0 ? <p className="text-center text-stone-400 py-10 italic">Nessun candidato trovato.</p> : availableCandidatesForWizard.map(c => (
+                                                    <div 
+                                                        key={c.id} 
+                                                        onClick={() => { const next = new Set(wizardSelectedCandidateIds); if(next.has(c.id)) next.delete(c.id); else next.add(c.id); setWizardSelectedCandidateIds(next); }} 
+                                                        className={`flex items-center gap-3 p-3 bg-white border rounded-xl cursor-pointer transition-all hover:shadow-sm ${wizardSelectedCandidateIds.has(c.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50' : 'border-stone-200'}`}
+                                                    >
+                                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${wizardSelectedCandidateIds.has(c.id) ? 'bg-indigo-600 border-indigo-600' : 'border-stone-300 bg-white'}`}>{wizardSelectedCandidateIds.has(c.id) && <CheckSquare size={14} className="text-white" />}</div>
+                                                        <div className="w-8 h-8 rounded-full bg-stone-100 overflow-hidden border border-stone-200">{c.photo ? <img src={`data:image/jpeg;base64,${c.photo}`} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center font-bold text-stone-500 text-xs">{c.fullName.charAt(0)}</div>}</div>
+                                                        <div><p className="font-bold text-sm text-stone-900">{c.fullName}</p><p className="text-xs text-stone-500">{c.skills.slice(0,3).join(', ')}</p></div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="mt-4 text-right text-xs font-bold text-indigo-600">{wizardSelectedCandidateIds.size} Selezionati</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* FOOTER */}
+                        <div className="bg-white border-t border-stone-200 p-6 flex justify-between items-center shadow-lg-up relative z-20">
+                            <button 
+                                onClick={() => creationStep > 1 ? setCreationStep(creationStep - 1) : setIsJobModalOpen(false)} 
+                                className="px-6 py-3 text-stone-600 hover:bg-stone-100 rounded-xl font-bold flex items-center gap-2 transition-colors"
+                            >
+                                {creationStep > 1 ? <ArrowLeft size={18}/> : null}
+                                {creationStep > 1 ? 'Indietro' : 'Annulla'}
+                            </button>
+                            
+                            <div className="flex gap-4">
+                                {creationStep < 3 ? (
+                                    <button 
+                                        onClick={() => setCreationStep(creationStep + 1)}
+                                        disabled={!jobForm.title} 
+                                        className="px-8 py-3 bg-stone-900 text-white rounded-xl font-bold hover:bg-emerald-600 transition-all flex items-center gap-2 shadow-lg disabled:opacity-50"
+                                    >
+                                        Avanti <ArrowRight size={18}/>
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={handleSaveJob}
+                                        disabled={isRecalculating}
+                                        className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
+                                    >
+                                        <CheckCircle size={20}/>
+                                        {editingJobId ? 'Aggiorna Posizione' : 'Crea Posizione'}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {/* ... Template Manager Modals (Same as before) ... */}
+                {/* Save Template Modal */}
+                {isSaveTemplateModalOpen && (
+                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[110] backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95">
+                            <h3 className="font-bold text-stone-900 mb-4 font-serif text-lg">Salva come Modello</h3>
+                            <input autoFocus value={templateName} onChange={e => setTemplateName(e.target.value)} className="w-full border border-stone-300 rounded-lg p-2.5 mb-4 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-stone-50 focus:bg-white" placeholder="Nome del modello..." />
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => setIsSaveTemplateModalOpen(false)} className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-xl text-sm font-medium">Annulla</button>
+                                <button onClick={handleConfirmSaveTemplate} disabled={!templateName} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50">Salva</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {/* Load Template Modal */}
+                {isLoadTemplateModalOpen && (
+                    <div className="fixed inset-0 bg-stone-900/40 flex items-center justify-center z-[110] backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col animate-in zoom-in-95">
+                            <h3 className="font-bold text-stone-900 mb-4 font-serif text-lg">Carica Modello</h3>
+                            <div className="flex-1 overflow-y-auto space-y-2 mb-4 custom-scrollbar">
+                                {templates.length === 0 ? <p className="text-stone-400 text-center py-4 italic">Nessun modello salvato.</p> : templates.map(t => (
+                                    <div key={t.id} onClick={() => handleLoadTemplate(t)} className="p-3 border border-stone-200 rounded-lg hover:bg-emerald-50 hover:border-emerald-200 cursor-pointer transition-colors group">
+                                        <div className="font-bold text-stone-800">{t.name}</div>
+                                        <div className="text-xs text-stone-500">{t.schema.categories.length} categorie</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <button onClick={() => setIsLoadTemplateModalOpen(false)} className="w-full py-2 bg-stone-100 text-stone-600 rounded-xl text-sm hover:bg-stone-200 font-medium">Chiudi</button>
+                        </div>
+                    </div>
+                )}
+
+                {/* DELETE JOB MODAL */}
+                {jobToDeleteId && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setJobToDeleteId(null)}>
+                        <div className="glass-card bg-white/95 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-stone-200" onClick={e => e.stopPropagation()}>
+                            <div className="flex flex-col items-center text-center">
+                                <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-600 border border-red-100 shadow-sm">
+                                    <Trash2 size={24} />
+                                </div>
+                                <h3 className="text-lg font-bold text-stone-900 mb-2 font-serif">Elimina Posizione</h3>
+                                <p className="text-sm text-stone-500 mb-6">
+                                    Sei sicuro di voler eliminare questa posizione? Verrà spostata nel cestino.
+                                </p>
+                                <div className="flex gap-3 w-full">
+                                    <button onClick={() => setJobToDeleteId(null)} disabled={isDeletingJob} className="flex-1 px-4 py-2 bg-stone-100 text-stone-700 rounded-xl font-medium hover:bg-stone-200 transition-colors disabled:opacity-50">Annulla</button>
+                                    <button onClick={confirmDeleteJob} disabled={isDeletingJob} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 shadow-lg shadow-red-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">{isDeletingJob ? <Loader2 size={16} className="animate-spin"/> : 'Elimina'}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* JOB INFO QUICK VIEW */}
+                {viewingJobInfoId && jobInfoTarget && (
+                    <div className="fixed inset-0 bg-stone-900/30 flex items-center justify-end z-[60] backdrop-blur-[2px]" onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }}>
+                        <div className="bg-white/95 h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-lg border-l border-white" onClick={e => e.stopPropagation()}>
+                            <div className="p-6 border-b border-stone-100 bg-stone-50/80 flex justify-between items-start shrink-0 relative z-50">
+                                <div>
+                                    <h3 className="text-2xl font-bold text-stone-900 mb-2 font-serif">{jobInfoTarget.title}</h3>
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <span className="bg-white border border-stone-200 px-2 py-0.5 rounded text-stone-600 font-medium shadow-sm">{jobInfoTarget.department}</span>
+                                        
+                                        {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) ? (
+                                            <div className="relative">
+                                                <button 
+                                                    onClick={() => setIsJobStatusDropdownOpen(!isJobStatusDropdownOpen)}
+                                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full font-bold text-xs border transition-all duration-200 shadow-sm ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.color || 'bg-stone-100 border-stone-200 text-stone-700'}`}
+                                                >
+                                                    <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-stone-400'}`}></span>
+                                                    {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
+                                                    <ChevronDownIcon size={12} className={`transition-transform duration-200 ${isJobStatusDropdownOpen ? 'rotate-180' : ''}`}/>
+                                                </button>
+
+                                                {isJobStatusDropdownOpen && (
+                                                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-stone-100 overflow-hidden animate-in slide-in-from-top-2 z-[100]">
+                                                        <div className="p-1">
+                                                            {Object.entries(JOB_STATUS_CONFIG).map(([key, config]) => (
+                                                                <button
+                                                                    key={key}
+                                                                    onClick={async () => {
+                                                                        await updateJob({ ...jobInfoTarget, status: key as any });
+                                                                        refreshData();
+                                                                        setIsJobStatusDropdownOpen(false);
+                                                                    }}
+                                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-stone-50 transition-colors ${jobInfoTarget.status === key ? 'bg-stone-50 text-stone-900' : 'text-stone-600'}`}
+                                                                >
+                                                                    <span className={`w-2 h-2 rounded-full ${config.dot}`}></span>
+                                                                    {config.label}
+                                                                    {jobInfoTarget.status === key && <Check size={14} className="ml-auto text-emerald-600"/>}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-2 border ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.color || 'bg-stone-100 border-stone-200 text-stone-700'}`}>
+                                                <span className={`w-2 h-2 rounded-full ${JOB_STATUS_CONFIG[jobInfoTarget.status]?.dot || 'bg-stone-400'}`}></span>
+                                                {JOB_STATUS_CONFIG[jobInfoTarget.status]?.label || jobInfoTarget.status}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <button onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); }} className="text-stone-400 hover:text-stone-600"><X size={24}/></button>
+                            </div>
+                            
+                            {(currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.HR) && (
+                                <div className="px-6 pt-4">
+                                    <button 
+                                        onClick={() => { setViewingJobInfoId(null); setIsJobStatusDropdownOpen(false); openEditJobModal(jobInfoTarget); }}
+                                        className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-bold border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                                    >
+                                        <Edit size={16} /> Modifica Dati Posizione
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar space-y-6">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                        <span className="text-xs font-bold text-blue-700 uppercase">Totale Candidati</span>
+                                        <div className="text-2xl font-bold text-blue-900 mt-1">
+                                            {data.applications.filter(a => a.jobId === jobInfoTarget.id).length}
+                                        </div>
+                                    </div>
+                                    <div className="bg-green-50 p-3 rounded-xl border border-green-100">
+                                        <span className="text-xs font-bold text-green-700 uppercase">Assunti</span>
+                                        <div className="text-2xl font-bold text-green-900 mt-1">
+                                            {data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.HIRED).length}
+                                        </div>
+                                    </div>
+                                    <div className="bg-purple-50 p-3 rounded-xl border border-purple-100">
+                                        <span className="text-xs font-bold text-purple-700 uppercase">Media Fit AI</span>
+                                        <div className="text-2xl font-bold text-purple-900 mt-1 flex items-center gap-1">
+                                            <BrainCircuit size={18}/>
+                                            {Math.round(
+                                                data.applications.filter(a => a.jobId === jobInfoTarget.id && a.aiScore).reduce((acc, curr) => acc + (curr.aiScore || 0), 0) / 
+                                                (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.aiScore).length || 1)
+                                            )}%
+                                        </div>
+                                    </div>
+                                    <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
+                                        <span className="text-xs font-bold text-yellow-700 uppercase">Media Score</span>
+                                        <div className="text-2xl font-bold text-yellow-900 mt-1 flex items-center gap-1">
+                                            <Ruler size={18}/>
+                                            {(
+                                                data.applications
+                                                    .filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults)
+                                                    .reduce((acc, curr) => {
+                                                        const appTotal = calculateSafeScore(curr, jobInfoTarget.scorecardSchema);
+                                                        return acc + appTotal;
+                                                    }, 0) /
+                                                (data.applications.filter(a => a.jobId === jobInfoTarget.id && a.scorecardResults).length || 1)
+                                            ).toFixed(1)}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm bg-stone-50 p-4 rounded-xl border border-stone-100">
+                                    <div>
+                                        <span className="block text-xs font-bold text-stone-400 uppercase mb-1">Data Creazione</span>
+                                        <span className="font-medium text-stone-900">{new Date(jobInfoTarget.createdAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-xs font-bold text-stone-400 uppercase mb-1">Scartati</span>
+                                        <span className="font-medium text-stone-900">{data.applications.filter(a => a.jobId === jobInfoTarget.id && a.status === SelectionStatus.REJECTED).length}</span>
+                                    </div>
+                                </div>
+                                <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><FileText size={14}/> Descrizione Posizione</h4><div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">{jobInfoTarget.description || "Nessuna descrizione disponibile."}</div></div>
+                                <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><ListChecks size={14}/> Requisiti</h4><div className="p-4 bg-stone-50 rounded-xl border border-stone-100 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed">{jobInfoTarget.requirements || "Nessun requisito specificato."}</div></div>
+                                <div><h4 className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-2"><Users size={14}/> Team di Selezione</h4><div className="bg-white border border-stone-200 rounded-xl overflow-hidden">{!jobInfoTarget.assignedTeamMembers || jobInfoTarget.assignedTeamMembers.length === 0 ? (<p className="p-4 text-sm text-stone-400 italic">Nessun membro assegnato.</p>) : (jobInfoTarget.assignedTeamMembers.map(uid => { const u = availableUsers.find(user => user.uid === uid); return (<div key={uid} className="flex items-center gap-3 p-3 hover:bg-stone-50 border-b border-stone-50 last:border-0"><div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-emerald-600 border border-stone-200">{u ? u.name.charAt(0) : '?'}</div><div><p className="text-sm font-bold text-stone-900">{u ? u.name : 'Utente ' + uid.substring(0,4)}</p><p className="text-xs text-stone-500">{u ? u.role : 'Membro Team'}</p></div></div>)}))}</div></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+            {/* QUICK VIEW OVERLAY */}
+            {viewingApp && (
+                <div className="fixed inset-0 bg-stone-900/30 flex items-center justify-end z-50 backdrop-blur-[2px]" onClick={() => setViewingApp(null)}>
+                    <div className="bg-white/95 h-full shadow-2xl flex flex-col animate-slide-left transition-all duration-300 w-full max-w-3xl border-l border-white" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-1 overflow-hidden h-full">
+                            {/* LEFT DETAILS */}
+                            <div className="flex flex-col h-full overflow-hidden w-full">
+                                <div className="p-6 border-b border-stone-100 bg-stone-50/80 shrink-0">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-16 h-16 rounded-full bg-white border-2 border-white overflow-hidden shadow-md flex items-center justify-center cursor-zoom-in hover:ring-2 hover:ring-emerald-400 transition-all" onClick={() => setIsPhotoZoomed(true)}>{viewingApp.candidate.photo ? <img src={`data:image/jpeg;base64,${viewingApp.candidate.photo}`} className="w-full h-full object-cover"/> : <span className="text-2xl font-bold text-emerald-600">{viewingApp.candidate.fullName.charAt(0)}</span>}</div>
+                                            <div>
+                                                <div className="flex items-center gap-3">
+                                                    <h2 className="text-2xl font-bold text-stone-900 font-serif">{view
